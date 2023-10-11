@@ -1,0 +1,11 @@
+package(default_visibility = ["//visibility:public"])
+
+cc_binary(
+    name = "test_includes",
+    srcs = ["test_includes.cc"],
+    deps = [
+        "@drake//:drake_shared_library",
+        "@grid_map//:grid_map_core",
+        "@pcl//:common",
+    ],
+)
