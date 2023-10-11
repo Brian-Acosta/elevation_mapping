@@ -9,20 +9,17 @@
 #pragma once
 
 // Grid Map
-#include <grid_map_ros/grid_map_ros.hpp>
+#include <grid_map_core/grid_map_core.hpp>
 
 // Eigen
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 
-// Kindr
-#include <kindr/Core>
+// Drake rigid transform
+#include "drake/math/rigid_transform.h"
 
 // Boost
 #include <boost/thread/recursive_mutex.hpp>
-
-// ROS
-#include <ros/ros.h>
 
 // Elevation Mapping
 #include "elevation_mapping/PointXYZRGBConfidenceRatio.hpp"
@@ -39,7 +36,7 @@ class ElevationMap {
   /*!
    * Constructor.
    */
-  explicit ElevationMap(ros::NodeHandle nodeHandle);
+  explicit ElevationMap();
 
   /*!
    * Destructor.
@@ -63,7 +60,7 @@ class ElevationMap {
    * @param transformationSensorToMap
    * @return true if successful.
    */
-  bool add(PointCloudType::Ptr pointCloud, Eigen::VectorXf& pointCloudVariances, const ros::Time& timeStamp,
+  bool add(PointCloudType::Ptr pointCloud, Eigen::VectorXf& pointCloudVariances, double timeStamp,
            const Eigen::Affine3d& transformationSensorToMap);
 
   /*!
@@ -76,7 +73,7 @@ class ElevationMap {
    * @return true if successful.
    */
   bool update(const grid_map::Matrix& varianceUpdate, const grid_map::Matrix& horizontalVarianceUpdateX,
-              const grid_map::Matrix& horizontalVarianceUpdateY, const grid_map::Matrix& horizontalVarianceUpdateXY, const ros::Time& time);
+              const grid_map::Matrix& horizontalVarianceUpdateY, const grid_map::Matrix& horizontalVarianceUpdateXY, double time);
 
   /*!
    * Triggers the fusion of the entire elevation map.
@@ -103,7 +100,7 @@ class ElevationMap {
    * @param transformationSensorToMap
    * @param updatedTime
    */
-  void visibilityCleanup(const ros::Time& updatedTime);
+  void visibilityCleanup(double updatedTime);
 
   /*!
    * Move the grid map w.r.t. to the grid map frame.
@@ -159,13 +156,13 @@ class ElevationMap {
    * Gets the time of last map update.
    * @return time of the last map update.
    */
-  ros::Time getTimeOfLastUpdate();
+  double getTimeOfLastUpdate();
 
   /*!
    * Gets the time of last map fusion.
    * @return time of the last map fusion.
    */
-  ros::Time getTimeOfLastFusion();
+  double getTimeOfLastFusion();
 
   /*!
    * Get the pose of the elevation map frame w.r.t. the inertial parent frame of the robot (e.g. world, map etc.).
@@ -210,7 +207,7 @@ class ElevationMap {
    * Set the timestamp of the raw and fused elevation map.
    * @param timestmap to set.
    */
-  void setTimestamp(ros::Time timestamp);
+  void setTimestamp(double time);
 
   /*!
    * If the raw elevation map has subscribers.
@@ -273,9 +270,6 @@ class ElevationMap {
    */
   static float cumulativeDistributionFunction(float x, float mean, float standardDeviation);
 
-  //! ROS nodehandle.
-  ros::NodeHandle nodeHandle_;
-
   //! Raw elevation map as grid map.
   grid_map::GridMap rawMap_;
 
@@ -297,10 +291,6 @@ class ElevationMap {
   //! Pose of the elevation map frame w.r.t. the inertial parent frame of the robot (e.g. world, map etc.).
   kindr::HomTransformQuatD pose_;
 
-  //! ROS publishers. Publishing of the raw elevation map is handled by the postprocessing pool.
-  ros::Publisher elevationMapFusedPublisher_;
-  ros::Publisher visibilityCleanupMapPublisher_;
-
   //! Mutex lock for fused map.
   boost::recursive_mutex fusedMapMutex_;
 
@@ -310,27 +300,7 @@ class ElevationMap {
   //! Mutex lock for visibility cleanup map.
   boost::recursive_mutex visibilityCleanupMapMutex_;
 
-  //! Underlying map subscriber.
-  ros::Subscriber underlyingMapSubscriber_;
-
-  //! Initial ros time
-  ros::Time initialTime_;
-
-  //! Parameters. Are set through the ElevationMapping class.
-  struct Parameters {
-    double minVariance_{0.000009};
-    double maxVariance_{0.0009};
-    double mahalanobisDistanceThreshold_{2.5};
-    double multiHeightNoise_{0.000009};
-    double minHorizontalVariance_{0.0001};
-    double maxHorizontalVariance_{0.05};
-    std::string underlyingMapTopic_;
-    bool enableVisibilityCleanup_{true};
-    bool enableContinuousCleanup_{false};
-    double visibilityCleanupDuration_{0.0};
-    double scanningDuration_{1.0};
-    double increaseHeightAlpha_{1.0};
-  };
+  //! parameters
   ThreadSafeDataWrapper<Parameters> parameters_;
 };
 
