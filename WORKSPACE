@@ -14,8 +14,9 @@ add_grid_map_dependencies()
 
 load("@rules_pcl//bzl:repositories.bzl", "pcl_repositories")
 
+# exclude dependencies brought in by drake
 pcl_repositories(
-    excludes = ["gtest", "eigen", "libpng"]
+    excludes = ["gtest", "eigen", "libpng", "zlib", "lz4"]
 )
 
 load("@grid_map//tools/workspace/pcl:setup.bzl", "setup_pcl")
