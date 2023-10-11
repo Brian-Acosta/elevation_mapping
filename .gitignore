@@ -25,5 +25,14 @@
 .project
 .settings
 
+# jetbrains
+.idea
+
 # Sublime
 *.sublime*
+
+# bazel
+bazel-bin
+bazel-elevation_mapping
+bazel-out
+bazel-testlogs
