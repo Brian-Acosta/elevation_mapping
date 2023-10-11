@@ -7,5 +7,6 @@ cc_binary(
         "@drake//:drake_shared_library",
         "@grid_map//grid_map_core",
         "@pcl//:common",
+        "@pcl//:filters",
     ],
 )

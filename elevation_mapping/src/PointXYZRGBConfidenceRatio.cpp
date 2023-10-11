@@ -21,9 +21,7 @@
 template class pcl::PointCloud<pcl::PointXYZRGBConfidenceRatio>;
 template class pcl::PCLBase<pcl::PointXYZRGBConfidenceRatio>;    // NOLINT(cppcoreguidelines-special-member-functions)
 template class pcl::VoxelGrid<pcl::PointXYZRGBConfidenceRatio>;  // NOLINT(cppcoreguidelines-special-member-functions)
-template void pcl::removeNaNFromPointCloud<pcl::PointXYZRGBConfidenceRatio>(
-    const pcl::PointCloud<pcl::PointXYZRGBConfidenceRatio>& cloud_in, pcl::PointCloud<pcl::PointXYZRGBConfidenceRatio>& cloud_out,
-    std::vector<int, std::allocator<int> >& index);
+template void pcl::removeNaNFromPointCloud<pcl::PointXYZRGBConfidenceRatio>(const pcl::PointCloud<pcl::PointXYZRGBConfidenceRatio>& cloud_in, pcl::PointCloud<pcl::PointXYZRGBConfidenceRatio>& cloud_out, pcl::Indices& index);
 template class pcl::ExtractIndices<pcl::PointXYZRGBConfidenceRatio>;
 template class pcl::PassThrough<pcl::PointXYZRGBConfidenceRatio>;
 

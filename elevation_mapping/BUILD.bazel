@@ -1,0 +1,21 @@
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "elevation_mapping_headers",
+    hdrs = [
+        "include/ThreadSafeDataWrapper.hpp",
+        "include/WeightedEmpiricalCumulativeDistributionFunction.hpp",
+    ],
+    strip_include_prefix = "include",
+)
+
+cc_library(
+    name = "pint_xyzrgb_confidence_ratio",
+    srcs = ["src/PointXYZRGBConfidenceRatio.cpp"],
+    hdrs = ["include/elevation_mapping/PointXYZRGBConfidenceRatio.hpp"],
+    strip_include_prefix = "include",
+    deps = [
+        "@pcl//:common",
+        "@pcl//:filters",
+    ],
+)
