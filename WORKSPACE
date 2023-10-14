@@ -16,7 +16,12 @@ load("@rules_pcl//bzl:repositories.bzl", "pcl_repositories")
 
 # exclude dependencies brought in by drake
 pcl_repositories(
-    excludes = ["gtest", "eigen", "libpng", "zlib"]
+    excludes = [
+        "gtest",
+        "eigen",
+        "libpng",
+        "zlib",
+    ],
 )
 
 load("@grid_map//tools/workspace/pcl:setup.bzl", "setup_pcl")

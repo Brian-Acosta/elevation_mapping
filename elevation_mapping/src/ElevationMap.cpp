@@ -9,9 +9,7 @@
 #include <cmath>
 #include <cstring>
 
-#include <grid_map_msgs/GridMap.h>
-#include <ros/ros.h>
-#include <Eigen/Dense>
+ #include <Eigen/Dense>
 
 #include "elevation_mapping/ElevationMap.hpp"
 #include "elevation_mapping/ElevationMapFunctors.hpp"

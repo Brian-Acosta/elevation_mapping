@@ -168,7 +168,7 @@ class ElevationMap {
    * Get the pose of the elevation map frame w.r.t. the inertial parent frame of the robot (e.g. world, map etc.).
    * @return pose of the elevation map frame w.r.t. the parent frame of the robot.
    */
-  const kindr::HomTransformQuatD& getPose();
+  const drake::math:RigidTransformd getPose();
 
   /*!
    * Gets the position of a raw data point (x, y of cell position & height of cell value) in
@@ -177,7 +177,7 @@ class ElevationMap {
    * @param position the position of the data point in the parent frame of the robot.
    * @return true if successful, false if no valid data available.
    */
-  bool getPosition3dInRobotParentFrame(const Eigen::Array2i& index, kindr::Position3D& position);
+  bool getPosition3dInRobotParentFrame(const Eigen::Array2i& index, const Eigen::Vector3d& position);
 
   /*!
    * Gets the fused data mutex.
@@ -289,7 +289,7 @@ class ElevationMap {
   bool hasUnderlyingMap_;
 
   //! Pose of the elevation map frame w.r.t. the inertial parent frame of the robot (e.g. world, map etc.).
-  kindr::HomTransformQuatD pose_;
+  drake::math::RigidTransformd pose_;
 
   //! Mutex lock for fused map.
   boost::recursive_mutex fusedMapMutex_;

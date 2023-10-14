@@ -3,18 +3,35 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "elevation_mapping_headers",
     hdrs = [
-        "include/ThreadSafeDataWrapper.hpp",
-        "include/WeightedEmpiricalCumulativeDistributionFunction.hpp",
+        "include/elevation_mapping/ElevationMapFunctors.hpp",
+        "include/elevation_mapping/ThreadSafeDataWrapper.hpp",
+        "include/elevation_mapping/WeightedEmpiricalCumulativeDistributionFunction.hpp",
     ],
     strip_include_prefix = "include",
 )
 
 cc_library(
-    name = "pint_xyzrgb_confidence_ratio",
+    name = "point_xyzrgb_confidence_ratio",
     srcs = ["src/PointXYZRGBConfidenceRatio.cpp"],
     hdrs = ["include/elevation_mapping/PointXYZRGBConfidenceRatio.hpp"],
     strip_include_prefix = "include",
     deps = [
+        "@pcl//:common",
+        "@pcl//:filters",
+    ],
+)
+
+cc_library(
+    name = "elevation_map",
+    srcs = ["src/ElevationMap.cpp"],
+    hdrs = ["include/elevation_mapping/ElevationMap.hpp"],
+    strip_include_prefix = "include",
+    deps = [
+        ":elevation_mapping_headers",
+        ":point_xyzrgb_confidence_ratio",
+        "@boost//:thread",
+        "@drake//:drake_shared_library",
+        "@grid_map//grid_map_core",
         "@pcl//:common",
         "@pcl//:filters",
     ],

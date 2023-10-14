@@ -19,7 +19,7 @@ namespace pcl {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
-struct _PointXYZRGBConfidenceRatio {  // NOLINT(cppcoreguidelines-pro-type-union-access)
+struct EIGEN_ALIGN16 _PointXYZRGBConfidenceRatio {  // NOLINT(cppcoreguidelines-pro-type-union-access)
   PCL_ADD_POINT4D;  // NOLINT(cppcoreguidelines-pro-type-union-access, readability-const-return-type, modernize-avoid-c-arrays) This adds
                     // the members x,y,z which can also be accessed using the point (which is float[4])
   PCL_ADD_RGB;      // NOLINT(cppcoreguidelines-pro-type-union-access, readability-const-return-type)
@@ -30,7 +30,7 @@ struct _PointXYZRGBConfidenceRatio {  // NOLINT(cppcoreguidelines-pro-type-union
     float data_c[4];  // NOLINT(readability-identifier-naming, modernize-avoid-c-arrays)
   };
   PCL_MAKE_ALIGNED_OPERATOR_NEW
-} EIGEN_ALIGN16;  // enforce SSE padding for correct memory alignment
+};  // enforce SSE padding for correct memory alignment
 #pragma GCC diagnostic pop
 
 struct PointXYZRGBConfidenceRatio : public _PointXYZRGBConfidenceRatio {
