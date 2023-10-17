@@ -153,7 +153,7 @@ class ElevationMap {
    * Get the pose of the elevation map frame w.r.t. the inertial parent frame of the robot (e.g. world, map etc.).
    * @return pose of the elevation map frame w.r.t. the parent frame of the robot.
    */
-  const drake::math:RigidTransformd getPose();
+  const drake::math::RigidTransformd& getPose();
 
   /*!
    * Gets the position of a raw data point (x, y of cell position & height of cell value) in
@@ -163,7 +163,7 @@ class ElevationMap {
    * @return true if successful, false if no valid data available.
    */
   bool getPosition3dInRobotParentFrame(const Eigen::Array2i& index,
-                                       const Eigen::Vector3d& position);
+                                       Eigen::Vector3d& position);
 
   /*!
    * Gets the fused data mutex.
@@ -293,8 +293,8 @@ class ElevationMap {
   //! Mutex lock for visibility cleanup map.
   boost::recursive_mutex visibilityCleanupMapMutex_;
 
-  //! Initial ros time
-  double initialTime_;
+  //! Initial time
+  double initialTime_ = -1;
 
   //! Parameters. Are set through the ElevationMapping class.
   struct Parameters {

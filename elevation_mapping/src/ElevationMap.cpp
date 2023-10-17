@@ -59,8 +59,6 @@ ElevationMap::ElevationMap(const std::string& parameter_yaml)
   rawMap_.setBasicLayers({"elevation", "variance"});
   fusedMap_.setBasicLayers({"elevation", "upper_bound", "lower_bound"});
   clear();
-
-  initialTime_ = -1;
 }
 
 ElevationMap::~ElevationMap() = default;
@@ -94,13 +92,17 @@ bool ElevationMap::add(const PointCloudType::Ptr pointCloud,
 
   // Initialization for time calculation.
   const auto methodStartTime = std::chrono::high_resolution_clock::now();
+  const float currentTimeSecondsPattern{
+    intAsFloat(static_cast<uint32_t>(static_cast<uint64_t>(timestamp)))
+  };
+
   boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
 
   // Update initial time if it is not initialized.
-  if (initialTime_.toSec() == 0) {
+  if (initialTime_ < 0) {
     initialTime_ = timestamp;
   }
-  const float scanTimeSinceInitialization = (timestamp - initialTime_).toSec();
+  const float scanTimeSinceInitialization = (timestamp - initialTime_);
 
   // Store references for efficient interation.
   auto& elevationLayer = rawMap_["elevation"];
@@ -201,16 +203,20 @@ bool ElevationMap::add(const PointCloudType::Ptr pointCloud,
   }
 
   clean();
-  rawMap_.setTimestamp(timestamp.toNSec());  // Point cloud stores time in microseconds.
+  rawMap_.setTimestamp(1e9 * timestamp);  // Point cloud stores time in nanoseconds.
 
-  const ros::WallDuration duration = ros::WallTime::now() - methodStartTime;
-  ROS_DEBUG("Raw map has been updated with a new point cloud in %f s.", duration.toSec());
+  const auto duration = std::chrono::high_resolution_clock::now() - methodStartTime;
+  drake::log()->info(
+      "Raw map has been updated with a new point cloud in {} s.", duration.count()
+  );
   return true;
 }
 
-bool ElevationMap::update(const grid_map::Matrix& varianceUpdate, const grid_map::Matrix& horizontalVarianceUpdateX,
-                          const grid_map::Matrix& horizontalVarianceUpdateY, const grid_map::Matrix& horizontalVarianceUpdateXY,
-                          const ros::Time& time) {
+bool ElevationMap::update(const grid_map::Matrix& varianceUpdate,
+                          const grid_map::Matrix& horizontalVarianceUpdateX,
+                          const grid_map::Matrix& horizontalVarianceUpdateY,
+                          const grid_map::Matrix& horizontalVarianceUpdateXY,
+                          double time) {
   boost::recursive_mutex::scoped_lock scopedLock(rawMapMutex_);
 
   const auto& size = rawMap_.getSize();
@@ -219,7 +225,7 @@ bool ElevationMap::update(const grid_map::Matrix& varianceUpdate, const grid_map
         (grid_map::Index(horizontalVarianceUpdateX.rows(), horizontalVarianceUpdateX.cols()) == size).all() &&
         (grid_map::Index(horizontalVarianceUpdateY.rows(), horizontalVarianceUpdateY.cols()) == size).all() &&
         (grid_map::Index(horizontalVarianceUpdateXY.rows(), horizontalVarianceUpdateXY.cols()) == size).all())) {
-    ROS_ERROR("The size of the update matrices does not match.");
+    drake::log()->error("The size of the update matrices does not match.");
     return false;
   }
 
@@ -228,20 +234,23 @@ bool ElevationMap::update(const grid_map::Matrix& varianceUpdate, const grid_map
   rawMap_.get("horizontal_variance_y") += horizontalVarianceUpdateY;
   rawMap_.get("horizontal_variance_xy") += horizontalVarianceUpdateXY;
   clean();
-  rawMap_.setTimestamp(time.toNSec());
+  rawMap_.setTimestamp(1e9 * time);
 
   return true;
 }
 
 bool ElevationMap::fuseAll() {
-  ROS_DEBUG("Requested to fuse entire elevation map.");
+  drake::log()->debug("Requested to fuse entire elevation map.");
   boost::recursive_mutex::scoped_lock scopedLock(fusedMapMutex_);
   return fuse(grid_map::Index(0, 0), fusedMap_.getSize());
 }
 
 bool ElevationMap::fuseArea(const Eigen::Vector2d& position, const Eigen::Array2d& length) {
-  ROS_DEBUG("Requested to fuse an area of the elevation map with center at (%f, %f) and side lengths (%f, %f)", position[0], position[1],
-            length[0], length[1]);
+  drake::log()->debug(
+      "Requested to fuse an area of the elevation map with center at ({}, {}) "
+      "and side lengths ({}, {})",
+      position[0], position[1], length[0], length[1]
+  );
 
   grid_map::Index topLeftIndex;
   grid_map::Index submapBufferSize;
@@ -261,15 +270,14 @@ bool ElevationMap::fuseArea(const Eigen::Vector2d& position, const Eigen::Array2
 }
 
 bool ElevationMap::fuse(const grid_map::Index& topLeftIndex, const grid_map::Index& size) {
-  ROS_DEBUG("Fusing elevation map...");
-
+  drake::log()->debug("Fusing elevation map...");
   // Nothing to do.
   if ((size == 0).any()) {
     return false;
   }
 
   // Initializations.
-  const ros::WallTime methodStartTime(ros::WallTime::now());
+  auto methodStartTime = std::chrono::high_resolution_clock::now();
 
   // Copy raw elevation map data for safe multi-threading.
   boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
@@ -404,7 +412,9 @@ bool ElevationMap::fuse(const grid_map::Index& topLeftIndex, const grid_map::Ind
     float mean = (weights * means).sum() / weights.sum();
 
     if (!std::isfinite(mean)) {
-      ROS_ERROR("Something went wrong when fusing the map: Mean = %f", mean);
+      drake::log()->error(
+          "Something went wrong when fusing the map: Mean = {}", mean
+      );
       continue;
     }
 
@@ -420,8 +430,8 @@ bool ElevationMap::fuse(const grid_map::Index& topLeftIndex, const grid_map::Ind
 
   fusedMap_.setTimestamp(rawMapCopy.getTimestamp());
 
-  const ros::WallDuration duration(ros::WallTime::now() - methodStartTime);
-  ROS_DEBUG("Elevation map has been fused in %f s.", duration.toSec());
+  const auto duration = std::chrono::high_resolution_clock::now() - methodStartTime;
+  drake::log()->debug("Elevation map has been fused in {} s.", duration.count());
 
   return true;
 }
@@ -442,11 +452,11 @@ bool ElevationMap::clear() {
   return true;
 }
 
-void ElevationMap::visibilityCleanup(const ros::Time& updatedTime) {
+void ElevationMap::visibilityCleanup(double updatedTime) {
   const Parameters parameters{parameters_.getData()};
   // Get current time to compute calculation time.
-  const ros::WallTime methodStartTime(ros::WallTime::now());
-  const double timeSinceInitialization = (updatedTime - initialTime_).toSec();
+  const auto methodStartTime = std::chrono::high_resolution_clock::now();
+  const double timeSinceInitialization = updatedTime - initialTime_;
 
   // Copy raw elevation map data for safe multi-threading.
   boost::recursive_mutex::scoped_lock scopedLockForVisibilityCleanupData(visibilityCleanupMapMutex_);
@@ -531,10 +541,16 @@ void ElevationMap::visibilityCleanup(const ros::Time& updatedTime) {
   }
   scopedLockForRawData.unlock();
 
-  ros::WallDuration duration(ros::WallTime::now() - methodStartTime);
-  ROS_DEBUG("Visibility cleanup has been performed in %f s (%d points).", duration.toSec(), (int)cellPositionsToRemove.size());
-  if (duration.toSec() > parameters.visibilityCleanupDuration_) {
-    ROS_WARN("Visibility cleanup duration is too high (current rate is %f).", 1.0 / duration.toSec());
+  const auto duration = std::chrono::high_resolution_clock::now() - methodStartTime;
+  drake::log()->debug(
+      "Visibility cleanup has been performed in {} s ({} points).",
+      duration.count(), static_cast<int>(cellPositionsToRemove.size())
+  );
+  if (duration.count() > parameters.visibilityCleanupDuration_) {
+    drake::log()->warn(
+        "Visibility cleanup duration is too high (current duration is {}).",
+        duration.count()
+    );
   }
 }
 
@@ -543,7 +559,8 @@ void ElevationMap::move(const Eigen::Vector2d& position) {
   std::vector<grid_map::BufferRegion> newRegions;
 
   if (rawMap_.move(position, newRegions)) {
-    ROS_DEBUG("Elevation map has been moved to position (%f, %f).", rawMap_.getPosition().x(), rawMap_.getPosition().y());
+    drake::log()->debug("Elevation map has been moved to position ({}, {}}).",
+                        rawMap_.getPosition().x(), rawMap_.getPosition().y());
 
     // The "dynamic_time" layer is meant to be interpreted as integer values, therefore nan:s need to be zeroed.
     grid_map::Matrix& dynTime{rawMap_.get("dynamic_time")};
@@ -573,25 +590,26 @@ void ElevationMap::setFusedGridMap(const grid_map::GridMap& map) {
   fusedMap_ = map;
 }
 
-ros::Time ElevationMap::getTimeOfLastUpdate() {
-  return ros::Time().fromNSec(rawMap_.getTimestamp());
+double ElevationMap::getTimeOfLastUpdate() {
+  return rawMap_.getTimestamp() * 1e-9;
 }
 
-ros::Time ElevationMap::getTimeOfLastFusion() {
+double ElevationMap::getTimeOfLastFusion() {
   boost::recursive_mutex::scoped_lock scopedLock(fusedMapMutex_);
-  return ros::Time().fromNSec(fusedMap_.getTimestamp());
+  return fusedMap_.getTimestamp() * 1e-9;
 }
 
-const kindr::HomTransformQuatD& ElevationMap::getPose() {
+const drake::math::RigidTransformd& ElevationMap::getPose() {
   return pose_;
 }
 
-bool ElevationMap::getPosition3dInRobotParentFrame(const Eigen::Array2i& index, kindr::Position3D& position) {
-  kindr::Position3D positionInGridFrame;
-  if (!rawMap_.getPosition3("elevation", index, positionInGridFrame.vector())) {
+bool ElevationMap::getPosition3dInRobotParentFrame(
+    const Eigen::Array2i& index, Eigen::Vector3d& position) {
+  Eigen::Vector3d positionInGridFrame;
+  if (!rawMap_.getPosition3("elevation", index, positionInGridFrame)) {
     return false;
   }
-  position = pose_.transform(positionInGridFrame);
+  position = pose_ * (positionInGridFrame);
   return true;
 }
 
@@ -628,9 +646,9 @@ void ElevationMap::setFrameId(const std::string& frameId) {
   fusedMap_.setFrameId(frameId);
 }
 
-void ElevationMap::setTimestamp(ros::Time timestamp) {
-  rawMap_.setTimestamp(timestamp.toNSec());
-  fusedMap_.setTimestamp(timestamp.toNSec());
+void ElevationMap::setTimestamp(double timestamp) {
+  rawMap_.setTimestamp(timestamp * 1e9);
+  fusedMap_.setTimestamp(timestamp * 1e9);
 }
 
 const std::string& ElevationMap::getFrameId() {
