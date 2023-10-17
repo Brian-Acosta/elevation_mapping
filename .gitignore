@@ -27,6 +27,7 @@
 
 # jetbrains
 .idea
+.clwb
 
 # Sublime
 *.sublime*

@@ -24,7 +24,6 @@
 // Elevation Mapping
 #include "elevation_mapping/PointXYZRGBConfidenceRatio.hpp"
 #include "elevation_mapping/ThreadSafeDataWrapper.hpp"
-#include "elevation_mapping/postprocessing/PostprocessorPool.hpp"
 
 namespace elevation_mapping {
 
@@ -36,7 +35,7 @@ class ElevationMap {
   /*!
    * Constructor.
    */
-  explicit ElevationMap();
+  explicit ElevationMap(const std::string& parameter_yaml = "");
 
   /*!
    * Destructor.
@@ -50,7 +49,9 @@ class ElevationMap {
    * @param position the 2d position of the elevation map in the elevation map frame [m].
    * @return true if successful.
    */
-  void setGeometry(const grid_map::Length& length, const double& resolution, const grid_map::Position& position);
+  void setGeometry(const grid_map::Length& length,
+                   const double& resolution,
+                   const grid_map::Position& position);
 
   /*!
    * Add new measurements to the elevation map.
@@ -60,8 +61,10 @@ class ElevationMap {
    * @param transformationSensorToMap
    * @return true if successful.
    */
-  bool add(PointCloudType::Ptr pointCloud, Eigen::VectorXf& pointCloudVariances, double timeStamp,
-           const Eigen::Affine3d& transformationSensorToMap);
+  bool add(PointCloudType::Ptr pointCloud,
+           Eigen::VectorXf& pointCloudVariances,
+           double timeStamp,
+           const drake::math::RigidTransformd& transformationSensorToMap);
 
   /*!
    * Update the elevation map with variance update data.
@@ -72,8 +75,10 @@ class ElevationMap {
    * @param time the time of the update.
    * @return true if successful.
    */
-  bool update(const grid_map::Matrix& varianceUpdate, const grid_map::Matrix& horizontalVarianceUpdateX,
-              const grid_map::Matrix& horizontalVarianceUpdateY, const grid_map::Matrix& horizontalVarianceUpdateXY, double time);
+  bool update(const grid_map::Matrix& varianceUpdate,
+              const grid_map::Matrix& horizontalVarianceUpdateX,
+              const grid_map::Matrix& horizontalVarianceUpdateY,
+              const grid_map::Matrix& horizontalVarianceUpdateXY, double time);
 
   /*!
    * Triggers the fusion of the entire elevation map.
@@ -107,26 +112,6 @@ class ElevationMap {
    * @param position the new location of the elevation map in the map frame.
    */
   void move(const Eigen::Vector2d& position);
-
-  /*!
-   * Publishes the (latest) raw elevation map. Optionally, if a postprocessing pipeline was configured,
-   * the map is postprocessed before publishing.
-   * @return true if successful.
-   */
-  bool postprocessAndPublishRawElevationMap();
-
-  /*!
-   * Publishes the fused elevation map. Takes the latest available fused elevation
-   * map, does not trigger the fusion process.
-   * @return true if successful.
-   */
-  bool publishFusedElevationMap();
-
-  /*!
-   * Publishes the (latest) visibility cleanup map.
-   * @return true if successful.
-   */
-  bool publishVisibilityCleanupMap();
 
   /*!
    * Gets a reference to the raw grid map.
@@ -177,7 +162,8 @@ class ElevationMap {
    * @param position the position of the data point in the parent frame of the robot.
    * @return true if successful, false if no valid data available.
    */
-  bool getPosition3dInRobotParentFrame(const Eigen::Array2i& index, const Eigen::Vector3d& position);
+  bool getPosition3dInRobotParentFrame(const Eigen::Array2i& index,
+                                       const Eigen::Vector3d& position);
 
   /*!
    * Gets the fused data mutex.
@@ -222,11 +208,11 @@ class ElevationMap {
   bool hasFusedMapSubscribers() const;
 
   /*!
-   * Callback method for the updates of the underlying map.
+   * Method for the updates of the underlying map.
    * Updates the internal underlying map.
    * @param underlyingMap the underlying map.
    */
-  void underlyingMapCallback(const grid_map_msgs::GridMap& underlyingMap);
+  void updateUnderlyingMap(const grid_map::GridMap& underlyingMap);
 
   /*!
    * Method to set the height value around the center of the robot, can be used for initialization.
@@ -235,12 +221,21 @@ class ElevationMap {
    * @param lengthInXSubmap Length of the submap in X direction.
    * @param lengthInYSubmap Length of the submap in Y direction.
    */
-  void setRawSubmapHeight(const grid_map::Position& initPosition, float mapHeight, float variance, double lengthInXSubmap,
+  void setRawSubmapHeight(const grid_map::Position& initPosition,
+                          float mapHeight,
+                          float variance,
+                          double lengthInXSubmap,
                           double lengthInYSubmap);
 
   friend class ElevationMapping;
 
  private:
+
+  /*!
+   * Loads parameters from a yaml and assigns them to the member params struct
+   */
+  bool loadParams(const std::string& parameter_yaml);
+
   /*!
    * Fuses a region of the map.
    * @param topLeftIndex the top left index of the region.
@@ -268,7 +263,8 @@ class ElevationMap {
    * @param standardDeviation the standardDeviation of the distribution.
    * @return the function value.
    */
-  static float cumulativeDistributionFunction(float x, float mean, float standardDeviation);
+  static float cumulativeDistributionFunction(float x, float mean,
+                                              float standardDeviation);
 
   //! Raw elevation map as grid map.
   grid_map::GridMap rawMap_;
@@ -281,9 +277,6 @@ class ElevationMap {
 
   //! Underlying map, used for ground truth maps, multi-robot mapping etc.
   grid_map::GridMap underlyingMap_;
-
-  //! Thread Pool to handle raw map postprocessing filter pipelines.
-  PostprocessorPool postprocessorPool_;
 
   //! True if underlying map has been set, false otherwise.
   bool hasUnderlyingMap_;
@@ -300,7 +293,24 @@ class ElevationMap {
   //! Mutex lock for visibility cleanup map.
   boost::recursive_mutex visibilityCleanupMapMutex_;
 
-  //! parameters
+  //! Initial ros time
+  double initialTime_;
+
+  //! Parameters. Are set through the ElevationMapping class.
+  struct Parameters {
+    double minVariance_{0.000009};
+    double maxVariance_{0.0009};
+    double mahalanobisDistanceThreshold_{2.5};
+    double multiHeightNoise_{0.000009};
+    double minHorizontalVariance_{0.0001};
+    double maxHorizontalVariance_{0.05};
+    std::string underlyingMapTopic_;
+    bool enableVisibilityCleanup_{true};
+    bool enableContinuousCleanup_{false};
+    double visibilityCleanupDuration_{0.0};
+    double scanningDuration_{1.0};
+    double increaseHeightAlpha_{1.0};
+  };
   ThreadSafeDataWrapper<Parameters> parameters_;
 };
 

@@ -7,14 +7,17 @@
  */
 
 #include <cmath>
+#include <chrono>
 #include <cstring>
 
- #include <Eigen/Dense>
+#include <Eigen/Dense>
 
 #include "elevation_mapping/ElevationMap.hpp"
 #include "elevation_mapping/ElevationMapFunctors.hpp"
 #include "elevation_mapping/PointXYZRGBConfidenceRatio.hpp"
 #include "elevation_mapping/WeightedEmpiricalCumulativeDistributionFunction.hpp"
+
+#include "drake/common/text_logging.h"
 
 namespace {
 /**
@@ -31,50 +34,66 @@ float intAsFloat(const uint32_t input) {
 
 namespace elevation_mapping {
 
-ElevationMap::ElevationMap(ros::NodeHandle nodeHandle)
-    : nodeHandle_(nodeHandle),
-      rawMap_({"elevation", "variance", "horizontal_variance_x", "horizontal_variance_y", "horizontal_variance_xy", "color", "time",
-               "dynamic_time", "lowest_scan_point", "sensor_x_at_lowest_scan", "sensor_y_at_lowest_scan", "sensor_z_at_lowest_scan"}),
+ElevationMap::ElevationMap(const std::string& parameter_yaml)
+    : rawMap_({
+        "elevation",
+        "variance",
+        "horizontal_variance_x",
+        "horizontal_variance_y",
+        "horizontal_variance_xy",
+        "color",
+        "time",
+        "dynamic_time",
+        "lowest_scan_point",
+        "sensor_x_at_lowest_scan",
+        "sensor_y_at_lowest_scan",
+        "sensor_z_at_lowest_scan"
+      }),
       fusedMap_({"elevation", "upper_bound", "lower_bound", "color"}),
-      postprocessorPool_(nodeHandle.param("postprocessor_num_threads", 1), nodeHandle_),
       hasUnderlyingMap_(false) {
+
+  if (not parameter_yaml.empty()) {
+    bool parameter_loading_success = loadParams(parameter_yaml);
+    DRAKE_DEMAND(parameter_loading_success);
+  }
   rawMap_.setBasicLayers({"elevation", "variance"});
   fusedMap_.setBasicLayers({"elevation", "upper_bound", "lower_bound"});
   clear();
-  const Parameters parameters{parameters_.getData()};
 
-  elevationMapFusedPublisher_ = nodeHandle_.advertise<grid_map_msgs::GridMap>("elevation_map", 1);
-  if (!parameters.underlyingMapTopic_.empty()) {
-    underlyingMapSubscriber_ = nodeHandle_.subscribe(parameters.underlyingMapTopic_, 1, &ElevationMap::underlyingMapCallback, this);
-  }
-  // TODO(max): if (enableVisibilityCleanup_) when parameter cleanup is ready.
-  visibilityCleanupMapPublisher_ = nodeHandle_.advertise<grid_map_msgs::GridMap>("visibility_cleanup_map", 1);
-
-  initialTime_ = ros::Time::now();
+  initialTime_ = -1;
 }
 
 ElevationMap::~ElevationMap() = default;
 
-void ElevationMap::setGeometry(const grid_map::Length& length, const double& resolution, const grid_map::Position& position) {
+void ElevationMap::setGeometry(const grid_map::Length& length,
+                               const double& resolution,
+                               const grid_map::Position& position) {
   boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
   boost::recursive_mutex::scoped_lock scopedLockForFusedData(fusedMapMutex_);
   rawMap_.setGeometry(length, resolution, position);
   fusedMap_.setGeometry(length, resolution, position);
-  ROS_INFO_STREAM("Elevation map grid resized to " << rawMap_.getSize()(0) << " rows and " << rawMap_.getSize()(1) << " columns.");
+  drake::log()->info(
+      "Elevation map grid resized to {} rows and {} columns",
+      rawMap_.getSize()(0),
+      rawMap_.getSize()(1)
+  );
 }
-bool ElevationMap::add(const PointCloudType::Ptr pointCloud, Eigen::VectorXf& pointCloudVariances, const ros::Time& timestamp,
-                       const Eigen::Affine3d& transformationSensorToMap) {
+bool ElevationMap::add(const PointCloudType::Ptr pointCloud,
+                       Eigen::VectorXf& pointCloudVariances,
+                       double timestamp,
+                       const drake::math::RigidTransformd& transformationSensorToMap) {
   const Parameters parameters{parameters_.getData()};
   if (static_cast<unsigned int>(pointCloud->size()) != static_cast<unsigned int>(pointCloudVariances.size())) {
-    ROS_ERROR("ElevationMap::add: Size of point cloud (%i) and variances (%i) do not agree.", (int)pointCloud->size(),
-              (int)pointCloudVariances.size());
+    drake::log()->error(
+        "ElevationMap::add: Size of point cloud {} and variances {} do not agree.",
+        (int)pointCloud->size(),
+        (int)pointCloudVariances.size()
+    );
     return false;
   }
 
   // Initialization for time calculation.
-  const ros::WallTime methodStartTime(ros::WallTime::now());
-  const ros::Time currentTime(ros::Time::now());
-  const float currentTimeSecondsPattern{intAsFloat(static_cast<uint32_t>(static_cast<uint64_t>(currentTime.toSec())))};
+  const auto methodStartTime = std::chrono::high_resolution_clock::now();
   boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
 
   // Update initial time if it is not initialized.
@@ -512,9 +531,6 @@ void ElevationMap::visibilityCleanup(const ros::Time& updatedTime) {
   }
   scopedLockForRawData.unlock();
 
-  // Publish visibility cleanup map for debugging.
-  publishVisibilityCleanupMap();
-
   ros::WallDuration duration(ros::WallTime::now() - methodStartTime);
   ROS_DEBUG("Visibility cleanup has been performed in %f s (%d points).", duration.toSec(), (int)cellPositionsToRemove.size());
   if (duration.toSec() > parameters.visibilityCleanupDuration_) {
@@ -537,52 +553,6 @@ void ElevationMap::move(const Eigen::Vector2d& position) {
       rawMap_.addDataFrom(underlyingMap_, false, false, true);
     }
   }
-}
-
-bool ElevationMap::postprocessAndPublishRawElevationMap() {
-  if (!hasRawMapSubscribers()) {
-    return false;
-  }
-  boost::recursive_mutex::scoped_lock scopedLock(rawMapMutex_);
-  grid_map::GridMap rawMapCopy = rawMap_;
-  scopedLock.unlock();
-  return postprocessorPool_.runTask(rawMapCopy);
-}
-
-bool ElevationMap::publishFusedElevationMap() {
-  if (!hasFusedMapSubscribers()) {
-    return false;
-  }
-  boost::recursive_mutex::scoped_lock scopedLock(fusedMapMutex_);
-  grid_map::GridMap fusedMapCopy = fusedMap_;
-  scopedLock.unlock();
-  fusedMapCopy.add("uncertainty_range", fusedMapCopy.get("upper_bound") - fusedMapCopy.get("lower_bound"));
-  grid_map_msgs::GridMap message;
-  grid_map::GridMapRosConverter::toMessage(fusedMapCopy, message);
-  elevationMapFusedPublisher_.publish(message);
-  ROS_DEBUG("Elevation map (fused) has been published.");
-  return true;
-}
-
-bool ElevationMap::publishVisibilityCleanupMap() {
-  if (visibilityCleanupMapPublisher_.getNumSubscribers() < 1) {
-    return false;
-  }
-  boost::recursive_mutex::scoped_lock scopedLock(visibilityCleanupMapMutex_);
-  grid_map::GridMap visibilityCleanupMapCopy = visibilityCleanupMap_;
-  scopedLock.unlock();
-  visibilityCleanupMapCopy.erase("elevation");
-  visibilityCleanupMapCopy.erase("variance");
-  visibilityCleanupMapCopy.erase("horizontal_variance_x");
-  visibilityCleanupMapCopy.erase("horizontal_variance_y");
-  visibilityCleanupMapCopy.erase("horizontal_variance_xy");
-  visibilityCleanupMapCopy.erase("color");
-  visibilityCleanupMapCopy.erase("time");
-  grid_map_msgs::GridMap message;
-  grid_map::GridMapRosConverter::toMessage(visibilityCleanupMapCopy, message);
-  visibilityCleanupMapPublisher_.publish(message);
-  ROS_DEBUG("Visibility cleanup map has been published.");
-  return true;
 }
 
 grid_map::GridMap& ElevationMap::getRawGridMap() {
@@ -667,35 +637,24 @@ const std::string& ElevationMap::getFrameId() {
   return rawMap_.getFrameId();
 }
 
-bool ElevationMap::hasRawMapSubscribers() const {
-  return postprocessorPool_.pipelineHasSubscribers();
-}
-
-bool ElevationMap::hasFusedMapSubscribers() const {
-  return elevationMapFusedPublisher_.getNumSubscribers() >= 1;
-}
-
-void ElevationMap::underlyingMapCallback(const grid_map_msgs::GridMap& underlyingMap) {
+void ElevationMap::updateUnderlyingMap(const grid_map::GridMap& underlyingMap) {
   const Parameters parameters{parameters_.getData()};
-  ROS_INFO("Updating underlying map.");
-  grid_map::GridMapRosConverter::fromMessage(underlyingMap, underlyingMap_);
-  if (underlyingMap_.getFrameId() != rawMap_.getFrameId()) {
-    ROS_ERROR_STREAM("The underlying map does not have the same map frame ('" << underlyingMap_.getFrameId() << "') as the elevation map ('"
-                                                                              << rawMap_.getFrameId() << "').");
-    return;
-  }
-  if (!underlyingMap_.exists("elevation")) {
-    ROS_ERROR_STREAM("The underlying map does not have an 'elevation' layer.");
-    return;
-  }
+  drake::log()->info("Updating underlying map.");
+
+  DRAKE_DEMAND(underlyingMap.getFrameId() == rawMap_.getFrameId());
+  DRAKE_DEMAND(underlyingMap.exists("elevation"));
+
+  underlyingMap_ = underlyingMap;
   if (!underlyingMap_.exists("variance")) {
     underlyingMap_.add("variance", parameters.minVariance_);
   }
   if (!underlyingMap_.exists("horizontal_variance_x")) {
-    underlyingMap_.add("horizontal_variance_x", parameters.minHorizontalVariance_);
+    underlyingMap_.add("horizontal_variance_x",
+                       parameters.minHorizontalVariance_);
   }
   if (!underlyingMap_.exists("horizontal_variance_y")) {
-    underlyingMap_.add("horizontal_variance_y", parameters.minHorizontalVariance_);
+    underlyingMap_.add("horizontal_variance_y",
+                       parameters.minHorizontalVariance_);
   }
   if (!underlyingMap_.exists("color")) {
     underlyingMap_.add("color", 0.0);
@@ -705,9 +664,13 @@ void ElevationMap::underlyingMapCallback(const grid_map_msgs::GridMap& underlyin
   rawMap_.addDataFrom(underlyingMap_, false, false, true);
 }
 
-void ElevationMap::setRawSubmapHeight(const grid_map::Position& initPosition, float mapHeight, float variance, double lengthInXSubmap,
+void ElevationMap::setRawSubmapHeight(const grid_map::Position& initPosition,
+                                      float mapHeight,
+                                      float variance,
+                                      double lengthInXSubmap,
                                       double lengthInYSubmap) {
-  // Set a submap area (lengthInYSubmap, lengthInXSubmap) with a constant height (mapHeight) and variance.
+  // Set a submap area (lengthInYSubmap, lengthInXSubmap) with a constant
+  // height (mapHeight) and variance.
   boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
 
   // Calculate submap iterator start index.
