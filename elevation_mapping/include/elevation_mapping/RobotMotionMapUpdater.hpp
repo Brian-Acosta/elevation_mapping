@@ -14,11 +14,8 @@
 // Eigen
 #include <Eigen/Core>
 
-// Kindr
-#include <kindr/Core>
-
-// ROS
-#include <ros/ros.h>
+// drake
+#include "drake/math/rigid_transform.h"
 
 namespace elevation_mapping {
 
@@ -27,7 +24,7 @@ namespace elevation_mapping {
  */
 class RobotMotionMapUpdater {
  public:
-  using Pose = kindr::HomogeneousTransformationPosition3RotationQuaternionD;
+  using Pose = drake::math::RigidTransformd;
   using Covariance = Eigen::Matrix<double, 3, 3>;
   using PoseCovariance = Eigen::Matrix<double, 6, 6>;
   using ReducedCovariance = Eigen::Matrix<double, 4, 4>;
@@ -36,7 +33,7 @@ class RobotMotionMapUpdater {
   /*!
    * Constructor.
    */
-  explicit RobotMotionMapUpdater(ros::NodeHandle nodeHandle);
+  explicit RobotMotionMapUpdater();
 
   /*!
    * Destructor.
@@ -58,7 +55,9 @@ class RobotMotionMapUpdater {
    * @param[in] time the time of the current update.
    * @return true if successful.
    */
-  bool update(ElevationMap& map, const Pose& robotPose, const PoseCovariance& robotPoseCovariance, const ros::Time& time);
+  bool update(ElevationMap& map,
+              const Pose& robotPose,
+              const PoseCovariance& robotPoseCovariance, double time);
 
  private:
   /*!
@@ -68,7 +67,8 @@ class RobotMotionMapUpdater {
    * @param[out] reducedCovariance the reduced covariance matrix (4x4);
    * @return true if successful.
    */
-  static bool computeReducedCovariance(const Pose& robotPose, const PoseCovariance& robotPoseCovariance,
+  static bool computeReducedCovariance(const Pose& robotPose,
+                                       const PoseCovariance& robotPoseCovariance,
                                        ReducedCovariance& reducedCovariance);
 
   /*!
@@ -78,13 +78,12 @@ class RobotMotionMapUpdater {
    * @param[out] relativeRobotPoseCovariance the relative covariance between the current and the previous robot pose (reduced form).
    * @return true if successful.
    */
-  bool computeRelativeCovariance(const Pose& robotPose, const ReducedCovariance& reducedCovariance, ReducedCovariance& relativeCovariance);
-
-  //! ROS nodehandle.
-  ros::NodeHandle nodeHandle_;
+  bool computeRelativeCovariance(const Pose& robotPose,
+                                 const ReducedCovariance& reducedCovariance,
+                                 ReducedCovariance& relativeCovariance);
 
   //! Time of the previous update.
-  ros::Time previousUpdateTime_;
+  double previousUpdateTime_;
 
   //! Previous robot pose.
   Pose previousRobotPose_;

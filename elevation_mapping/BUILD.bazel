@@ -11,6 +11,28 @@ cc_library(
 )
 
 cc_library(
+    name = "sensor_processors",
+    srcs = glob(["src/sensor_processors/*.cpp"]),
+    hdrs = glob(["include/elevation_mapping/sensor_processors/*.hpp"]),
+    deps = [
+        ":elevation_mapping_headers",
+        ":point_xyzrgb_confidence_ratio",
+        "@eigen",
+    ],
+)
+
+cc_library(
+    name = "robot_motion_map_updater",
+    srcs = ["src/RobotMotionMapUpdater.cpp"],
+    hdrs = ["include/elevation_mapping/RobotMotionMapUpdater.hpp"],
+    strip_include_prefix = "include",
+    deps = [
+        ":elevation_map",
+        "@eigen",
+    ],
+)
+
+cc_library(
     name = "point_xyzrgb_confidence_ratio",
     srcs = ["src/PointXYZRGBConfidenceRatio.cpp"],
     hdrs = ["include/elevation_mapping/PointXYZRGBConfidenceRatio.hpp"],

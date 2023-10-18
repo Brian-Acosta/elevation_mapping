@@ -7,28 +7,28 @@
  */
 #include "elevation_mapping/RobotMotionMapUpdater.hpp"
 
-// Kindr
-#include <kindr/Core>
-
-// using namespace kindr;
-
 namespace elevation_mapping {
 
-RobotMotionMapUpdater::RobotMotionMapUpdater(ros::NodeHandle nodeHandle) : nodeHandle_(nodeHandle), covarianceScale_(1.0) {
+using drake::math::RotationMatrixd;
+using drake::math::RollPitchYawd;
+
+RobotMotionMapUpdater::RobotMotionMapUpdater() : covarianceScale_(1.0) {
   previousReducedCovariance_.setZero();
-  previousUpdateTime_ = ros::Time::now();
+  previousUpdateTime_ = 0;
   // TODO(max): How to initialize previousRobotPose_?
 }
 
 RobotMotionMapUpdater::~RobotMotionMapUpdater() = default;
 
 bool RobotMotionMapUpdater::readParameters() {
-  nodeHandle_.param("robot_motion_map_update/covariance_scale", covarianceScale_, 1.0);
   return true;
 }
 
-bool RobotMotionMapUpdater::update(ElevationMap& map, const Pose& robotPose, const PoseCovariance& robotPoseCovariance,
-                                   const ros::Time& time) {
+bool RobotMotionMapUpdater::update(ElevationMap& map,
+                                   const Pose& robotPose,
+                                   const PoseCovariance& robotPoseCovariance,
+                                   double time) {
+
   const PoseCovariance robotPoseCovarianceScaled = covarianceScale_ * robotPoseCovariance;
 
   // Check if update necessary.
@@ -55,9 +55,10 @@ bool RobotMotionMapUpdater::update(ElevationMap& map, const Pose& robotPose, con
   rotationCovariance(2, 2) = relativeCovariance(3, 3);
 
   // Map to robot pose rotation (R_B_M = R_I_B^T * R_I_M).
-  kindr::RotationMatrixPD mapToRobotRotation = kindr::RotationMatrixPD(robotPose.getRotation().inverted() * map.getPose().getRotation());
-  kindr::RotationMatrixPD mapToPreviousRobotRotationInverted =
-      kindr::RotationMatrixPD(previousRobotPose_.getRotation().inverted() * map.getPose().getRotation()).inverted();
+  RotationMatrixd mapToRobotRotation = robotPose.rotation().inverse() * map.getPose().rotation();
+  RotationMatrixd mapToPreviousRobotRotationInverted = (
+      previousRobotPose_.rotation().inverse() * map.getPose().rotation()
+  ).inverse();
 
   // Translation Jacobian (J_r) (25).
   Eigen::Matrix3d translationJacobian = -mapToRobotRotation.matrix().transpose();
@@ -69,25 +70,29 @@ bool RobotMotionMapUpdater::update(ElevationMap& map, const Pose& robotPose, con
   // Map-robot relative position (M_r_Bk_M, for all points the same).
   // Preparation for (25): M_r_BP = R_I_M^T (I_r_I_M - I_r_I_B) + M_r_M_P
   // R_I_M^T (I_r_I_M - I_r_I_B):
-  const kindr::Position3D positionRobotToMap =
-      map.getPose().getRotation().inverseRotate(map.getPose().getPosition() - previousRobotPose_.getPosition());
+  const Eigen::Vector3d& positionRobotToMap =
+      map.getPose().rotation().inverse() * (map.getPose().translation() - previousRobotPose_.translation());
 
   auto& heightLayer = map.getRawGridMap()["elevation"];
 
   // For each cell in map. // TODO(max): Change to new iterator.
   for (unsigned int i = 0; i < static_cast<unsigned int>(size(0)); ++i) {
     for (unsigned int j = 0; j < static_cast<unsigned int>(size(1)); ++j) {
-      kindr::Position3D cellPosition;  // M_r_MP
+      Eigen::Vector3d cellPosition;  // M_r_MP
 
       const auto height = heightLayer(i, j);
       if (std::isfinite(height)) {
         grid_map::Position position;
         map.getRawGridMap().getPosition({i, j}, position);
-        cellPosition = {position.x(), position.y(), height};
+        cellPosition = Eigen::Vector3d(position.x(), position.y(), height);
 
         // Rotation Jacobian J_R (25)
-        const Eigen::Matrix3d rotationJacobian =
-            -kindr::getSkewMatrixFromVector((positionRobotToMap + cellPosition).vector()) * mapToPreviousRobotRotationInverted.matrix();
+        Eigen::Matrix3d rotationJacobian;
+        for (int i = 0; i < 3; i++) {
+          rotationJacobian.col(i) =
+              -(positionRobotToMap + cellPosition).cross(mapToPreviousRobotRotationInverted.col(i));
+        }
+
 
         // Rotation variance update.
         const Eigen::Matrix2f rotationVarianceUpdate =
@@ -117,10 +122,14 @@ bool RobotMotionMapUpdater::update(ElevationMap& map, const Pose& robotPose, con
 bool RobotMotionMapUpdater::computeReducedCovariance(const Pose& robotPose, const PoseCovariance& robotPoseCovariance,
                                                      ReducedCovariance& reducedCovariance) {
   // Get augmented Jacobian (A.4).
-  kindr::EulerAnglesZyxPD eulerAngles(robotPose.getRotation());
-  double tanOfPitch = tan(eulerAngles.pitch());
+  RollPitchYawd eulerAngles(robotPose.rotation());
+  double tanOfPitch = tan(eulerAngles.pitch_angle());
   // (A.5)
-  Eigen::Matrix<double, 1, 3> yawJacobian(cos(eulerAngles.yaw()) * tanOfPitch, sin(eulerAngles.yaw()) * tanOfPitch, 1.0);
+  Eigen::Matrix<double, 1, 3> yawJacobian(
+      cos(eulerAngles.yaw_angle()) * tanOfPitch,
+      sin(eulerAngles.yaw_angle()) * tanOfPitch,
+      1.0
+  );
   Eigen::Matrix<double, 4, 6> jacobian;
   jacobian.setZero();
   jacobian.topLeftCorner(3, 3).setIdentity();
@@ -134,20 +143,20 @@ bool RobotMotionMapUpdater::computeReducedCovariance(const Pose& robotPose, cons
 bool RobotMotionMapUpdater::computeRelativeCovariance(const Pose& robotPose, const ReducedCovariance& reducedCovariance,
                                                       ReducedCovariance& relativeCovariance) {
   // Rotation matrix of z-align frame R_I_tilde_B.
-  const kindr::RotationVectorPD rotationVector_I_B(robotPose.getRotation());
-  const kindr::RotationVectorPD rotationVector_I_tilde_B(0.0, 0.0, rotationVector_I_B.vector().z());
-  const kindr::RotationMatrixPD R_I_tilde_B(rotationVector_I_tilde_B);
+  const RollPitchYawd rpy_I_B(robotPose.rotation());
+  const RotationMatrixd R_I_tilde_B = RotationMatrixd::MakeZRotation(
+      rpy_I_B.yaw_angle()
+  );
 
   // Compute translational velocity from finite differences.
-  kindr::Position3D positionInRobotFrame =
-      previousRobotPose_.getRotation().inverseRotate(robotPose.getPosition() - previousRobotPose_.getPosition());
-  kindr::Velocity3D v_Delta_t(positionInRobotFrame);  // (A.8)
+  Eigen::Vector3d positionInRobotFrame = previousRobotPose_.rotation().inverse()
+      * (robotPose.translation() - previousRobotPose_.translation());
+  Eigen::Vector3d v_Delta_t = positionInRobotFrame;  // (A.8)
 
   // Jacobian F (A.8).
   Jacobian F;
   F.setIdentity();
-  // TODO(max): Why does Eigen::Vector3d::UnitZ() not work?
-  F.topRightCorner(3, 1) = kindr::getSkewMatrixFromVector(Eigen::Vector3d(0.0, 0.0, 1.0)) * R_I_tilde_B.matrix() * v_Delta_t.vector();
+  F.topRightCorner(3, 1) = Eigen::Vector3d::UnitZ().cross(R_I_tilde_B.matrix() * v_Delta_t);
 
   // Jacobian inv(G) * Delta t (A.14).
   Jacobian inv_G_Delta_t;

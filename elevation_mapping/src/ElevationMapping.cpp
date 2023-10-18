@@ -311,6 +311,17 @@ void ElevationMapping::visibilityCleanupThread() {
   }
 }
 
+
+// step by step:
+// 1. check for a robot pos in the cache
+// 2. convert the point cloud to a pcl::PointCloudPtr
+// 3. get robot pose message and covariance
+// 4. apply sensor preprocessor to pointcloud
+// 5. updateMapLocation
+// 6. updatePrediction
+// 7. maybe clean up the map
+// 8. add the pointcloud to the map
+// 9. maybe publish the map
 void ElevationMapping::pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& pointCloudMsg, bool publishPointCloud,
                                           const SensorProcessorBase::Ptr& sensorProcessor_) {
   const Parameters parameters{parameters_.getData()};

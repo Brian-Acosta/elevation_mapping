@@ -16,8 +16,6 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/pcl_base.h>
 
-// TF
-#include <tf_conversions/tf_eigen.h>
 
 // STL
 #include <cmath>
@@ -26,40 +24,42 @@
 
 #include "elevation_mapping/PointXYZRGBConfidenceRatio.hpp"
 
+// drake
+#include "drake/common/text_logging.h"
+
 namespace elevation_mapping {
 
-SensorProcessorBase::SensorProcessorBase(ros::NodeHandle& nodeHandle, const GeneralParameters& generalConfig)
-    : nodeHandle_(nodeHandle), firstTfAvailable_(false) {
+using drake::math::RigidTransformd;
+
+SensorProcessorBase::SensorProcessorBase(const GeneralParameters& generalConfig)
+    : firstTfAvailable_(false),
+    transformationSensorToMap_(RigidTransformd()) {
   pcl::console::setVerbosityLevel(pcl::console::L_ERROR);
-  transformationSensorToMap_.setIdentity();
   generalParameters_ = generalConfig;
-  ROS_DEBUG(
+
+  drake::log()->info(
       "Sensor processor general parameters are:"
-      "\n\t- robot_base_frame_id: %s"
-      "\n\t- map_frame_id: %s",
-      generalConfig.robotBaseFrameId_.c_str(), generalConfig.mapFrameId_.c_str());
+      "\n\t- robot_base_frame_id: {}"
+      "\n\t- map_frame_id: {},"
+      generalConfig.robotBaseFrameId_, generalConfig.mapFrameId_
+  );
 }
 
 SensorProcessorBase::~SensorProcessorBase() = default;
 
-bool SensorProcessorBase::readParameters() {
-  Parameters parameters;
-  nodeHandle_.param("sensor_processor/ignore_points_above", parameters.ignorePointsUpperThreshold_,
-                    std::numeric_limits<double>::infinity());
-  nodeHandle_.param("sensor_processor/ignore_points_below", parameters.ignorePointsLowerThreshold_,
-                    -std::numeric_limits<double>::infinity());
-
-  nodeHandle_.param("sensor_processor/apply_voxelgrid_filter", parameters.applyVoxelGridFilter_, false);
-  nodeHandle_.param("sensor_processor/voxelgrid_filter_size", parameters.sensorParameters_["voxelgrid_filter_size"], 0.0);
-  parameters_.setData(parameters);
+bool SensorProcessorBase::readParameters(const std::string& yaml_filename) {
+  drake::log()->warn("TODO: implement parameter reading from yaml");
   return true;
 }
 
-bool SensorProcessorBase::process(const PointCloudType::ConstPtr pointCloudInput, const Eigen::Matrix<double, 6, 6>& robotPoseCovariance,
-                                  const PointCloudType::Ptr pointCloudMapFrame, Eigen::VectorXf& variances, std::string sensorFrame) {
+bool SensorProcessorBase::process(const PointCloudType::ConstPtr pointCloudInput,
+                                  const Eigen::Matrix<double, 6, 6>& robotPoseCovariance,
+                                  const PointCloudType::Ptr pointCloudMapFrame,
+                                  Eigen::VectorXf& variances,
+                                  std::string sensorFrame) {
+
   const Parameters parameters{parameters_.getData()};
   sensorFrameId_ = sensorFrame;
-  ROS_DEBUG("Sensor Processor processing for frame %s", sensorFrameId_.c_str());
 
   // Update transformation at timestamp of pointcloud
   ros::Time timeStamp;

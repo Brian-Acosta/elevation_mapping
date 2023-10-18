@@ -8,15 +8,8 @@
 
 #pragma once
 
-// ROS
-#include <ros/ros.h>
-#include <tf/transform_listener.h>
-
 // Eigen
 #include <Eigen/Core>
-
-// Kindr
-#include <kindr/Core>
 
 // STL
 #include <memory>
@@ -26,6 +19,9 @@
 // Elevation Mapping
 #include "elevation_mapping/PointXYZRGBConfidenceRatio.hpp"
 #include "elevation_mapping/ThreadSafeDataWrapper.hpp"
+
+// drake
+#include "drake/math/rigid_transform.h"
 
 namespace elevation_mapping {
 
@@ -47,7 +43,8 @@ class SensorProcessorBase {
     std::string robotBaseFrameId_;
     std::string mapFrameId_;
 
-    explicit GeneralParameters(std::string robotBaseFrameId = "robot", std::string mapFrameId = "map")
+    explicit GeneralParameters(
+        std::string robotBaseFrameId = "robot", std::string mapFrameId = "map")
         : robotBaseFrameId_(std::move(robotBaseFrameId)), mapFrameId_(std::move(mapFrameId)) {}
   };
 
@@ -56,7 +53,7 @@ class SensorProcessorBase {
    * @param nodeHandle the ROS node handle.
    * @param generalConfig General parameters that the sensor processor must know in order to work. // TODO (magnus) improve documentation.
    */
-  SensorProcessorBase(ros::NodeHandle& nodeHandle, const GeneralParameters& generalConfig);
+  SensorProcessorBase(const GeneralParameters& generalConfig);
 
   /*!
    * Destructor.
@@ -71,8 +68,12 @@ class SensorProcessorBase {
    * @param[out] variances the measurement variances expressed in the target frame.
    * @return true if successful.
    */
-  bool process(PointCloudType::ConstPtr pointCloudInput, const Eigen::Matrix<double, 6, 6>& robotPoseCovariance,
-               PointCloudType::Ptr pointCloudMapFrame, Eigen::VectorXf& variances, std::string sensorFrame);
+  bool process(PointCloudType::ConstPtr pointCloudInput,
+               const Eigen::Matrix<double, 6, 6>& robotPoseCovariance,
+               PointCloudType::Ptr pointCloudMapFrame,
+               Eigen::VectorXf& variances,
+               drake::math::RigidTransformd sensorPoseInBaseFrame,
+               drake::math::RigidTransformd robotBaseFramePoseInMapFrame);
 
   /*!
    * Checks if a valid tf transformation was received since startup.
@@ -81,11 +82,21 @@ class SensorProcessorBase {
   bool isTfAvailableInBuffer() const { return firstTfAvailable_; }
 
  protected:
+
+  /*!
+   * Update the transformations for a given time stamp.
+   * @param timeStamp the time stamp for the transformation.
+   * @return true if successful.
+   */
+  bool updateTransformations(
+      const drake::math::RigidTransformd& sensorPoseInBaseFrame,
+      const drake::math::RigidTransformd& robotBaseFramePoseInMapFrame);
+
   /*!
    * Reads and verifies the parameters.
    * @return true if successful.
    */
-  virtual bool readParameters();
+  virtual bool readParameters(const std::string& yaml_filename);
 
   /*!
    * Filters the point cloud regardless of the sensor type. Removes NaN values.
@@ -111,15 +122,9 @@ class SensorProcessorBase {
    * @param[out] variances the elevation map height variances.
    * @return true if successful.
    */
-  virtual bool computeVariances(PointCloudType::ConstPtr pointCloud, const Eigen::Matrix<double, 6, 6>& robotPoseCovariance,
+  virtual bool computeVariances(PointCloudType::ConstPtr pointCloud,
+                                const Eigen::Matrix<double, 6, 6>& robotPoseCovariance,
                                 Eigen::VectorXf& variances) = 0;
-
-  /*!
-   * Update the transformations for a given time stamp.
-   * @param timeStamp the time stamp for the transformation.
-   * @return true if successful.
-   */
-  bool updateTransformations(const ros::Time& timeStamp);
 
   /*!
    * Transforms the point cloud the a target frame.
@@ -128,31 +133,29 @@ class SensorProcessorBase {
    * @param[in] targetFrame the desired target frame.
    * @return true if successful.
    */
-  bool transformPointCloud(PointCloudType::ConstPtr pointCloud, PointCloudType::Ptr pointCloudTransformed, const std::string& targetFrame);
+  bool transformPointCloud(PointCloudType::ConstPtr pointCloud,
+                           PointCloudType::Ptr pointCloudTransformed,
+                           const std::string& targetFrame);
 
   /*!
    * Removes points with z-coordinate above a limit in map frame.
    * @param[in/out] pointCloud the point cloud to be cropped.
    */
-  void removePointsOutsideLimits(PointCloudType::ConstPtr reference, std::vector<PointCloudType::Ptr>& pointClouds);
+  void removePointsOutsideLimits(PointCloudType::ConstPtr reference,
+                                 std::vector<PointCloudType::Ptr>& pointClouds);
 
-  //! ROS nodehandle.
-  ros::NodeHandle& nodeHandle_;
 
-  //! TF transform listener.
-  tf::TransformListener transformListener_;
-
-  //! Rotation from Base to Sensor frame (C_SB)
-  kindr::RotationMatrixD rotationBaseToSensor_;
+  //! Rotation from Base to Sensor frame (R_SB)
+  drake::math::RotationMatrixd rotationBaseToSensor_;
 
   //! Translation from Base to Sensor in Base frame (B_r_BS)
-  kindr::Position3D translationBaseToSensorInBaseFrame_;
+  Eigen::Vector3d translationBaseToSensorInBaseFrame_;
 
   //! Rotation from (elevation) Map to Base frame (C_BM)
-  kindr::RotationMatrixD rotationMapToBase_;
+  drake::math::RotationMatrixd rotationMapToBase_;
 
   //! Translation from Map to Base in Map frame (M_r_MB)
-  kindr::Position3D translationMapToBaseInMapFrame_;
+  Eigen::Vector3d translationMapToBaseInMapFrame_;
 
   //! Transformation from Sensor to Map frame
   Eigen::Affine3d transformationSensorToMap_;

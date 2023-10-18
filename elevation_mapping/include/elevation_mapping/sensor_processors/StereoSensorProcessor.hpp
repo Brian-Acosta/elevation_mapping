@@ -49,7 +49,8 @@ class StereoSensorProcessor : public SensorProcessorBase {
    * @param[out] variances the elevation map height variances.
    * @return true if successful.
    */
-  bool computeVariances(PointCloudType::ConstPtr pointCloud, const Eigen::Matrix<double, 6, 6>& robotPoseCovariance,
+  bool computeVariances(PointCloudType::ConstPtr pointCloud,
+                        const Eigen::Matrix<double, 6, 6>& robotPoseCovariance,
                         Eigen::VectorXf& variances) override;
 
   /*!
