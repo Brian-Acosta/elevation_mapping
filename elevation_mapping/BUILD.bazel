@@ -14,9 +14,11 @@ cc_library(
     name = "sensor_processors",
     srcs = glob(["src/sensor_processors/*.cpp"]),
     hdrs = glob(["include/elevation_mapping/sensor_processors/*.hpp"]),
+    strip_include_prefix = "include",
     deps = [
         ":elevation_mapping_headers",
         ":point_xyzrgb_confidence_ratio",
+        "@drake//:drake_shared_library",
         "@eigen",
     ],
 )

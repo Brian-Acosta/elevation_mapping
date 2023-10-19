@@ -33,14 +33,14 @@ using drake::math::RigidTransformd;
 
 SensorProcessorBase::SensorProcessorBase(const GeneralParameters& generalConfig)
     : firstTfAvailable_(false),
-    transformationSensorToMap_(RigidTransformd()) {
+    transformationSensorToMap_(Eigen::Affine3d::Identity()) {
   pcl::console::setVerbosityLevel(pcl::console::L_ERROR);
   generalParameters_ = generalConfig;
 
   drake::log()->info(
       "Sensor processor general parameters are:"
       "\n\t- robot_base_frame_id: {}"
-      "\n\t- map_frame_id: {},"
+      "\n\t- map_frame_id: {}",
       generalConfig.robotBaseFrameId_, generalConfig.mapFrameId_
   );
 }
@@ -54,23 +54,19 @@ bool SensorProcessorBase::readParameters(const std::string& yaml_filename) {
 
 bool SensorProcessorBase::process(const PointCloudType::ConstPtr pointCloudInput,
                                   const Eigen::Matrix<double, 6, 6>& robotPoseCovariance,
-                                  const PointCloudType::Ptr pointCloudMapFrame,
+                                  PointCloudType::Ptr pointCloudMapFrame,
                                   Eigen::VectorXf& variances,
-                                  std::string sensorFrame) {
+                                  const RigidTransformd& sensorPoseInBaseFrame,
+                                  const RigidTransformd& robotBaseFramePoseInMapFrame) {
 
   const Parameters parameters{parameters_.getData()};
-  sensorFrameId_ = sensorFrame;
 
-  // Update transformation at timestamp of pointcloud
-  ros::Time timeStamp;
-  timeStamp.fromNSec(1000 * pointCloudInput->header.stamp);
-  if (!updateTransformations(timeStamp)) {
-    return false;
-  }
+  updateTransformations(sensorPoseInBaseFrame, robotBaseFramePoseInMapFrame);
 
-  // Transform into sensor frame.
+  // For now, assume the Point Cloud is already in the sensor frame
   PointCloudType::Ptr pointCloudSensorFrame(new PointCloudType);
-  transformPointCloud(pointCloudInput, pointCloudSensorFrame, sensorFrameId_);
+  pcl::copyPointCloud(*pointCloudInput, *pointCloudSensorFrame);
+  //  transformPointCloud(pointCloudInput, pointCloudSensorFrame, sensorFrameId_);
 
   // Remove Nans (optional voxel grid filter)
   filterPointCloud(pointCloudSensorFrame);
@@ -79,7 +75,11 @@ bool SensorProcessorBase::process(const PointCloudType::ConstPtr pointCloudInput
   filterPointCloudSensorType(pointCloudSensorFrame);
 
   // Remove outside limits in map frame
-  if (!transformPointCloud(pointCloudSensorFrame, pointCloudMapFrame, generalParameters_.mapFrameId_)) {
+  if (!transformPointCloud(
+      pointCloudSensorFrame,
+      pointCloudMapFrame,
+      robotBaseFramePoseInMapFrame * sensorPoseInBaseFrame
+      )) {
     return false;
   }
   std::vector<PointCloudType::Ptr> pointClouds({pointCloudMapFrame, pointCloudSensorFrame});
@@ -89,64 +89,26 @@ bool SensorProcessorBase::process(const PointCloudType::ConstPtr pointCloudInput
   return computeVariances(pointCloudSensorFrame, robotPoseCovariance, variances);
 }
 
-bool SensorProcessorBase::updateTransformations(const ros::Time& timeStamp) {
-  const Parameters parameters{parameters_.getData()};
-  try {
-    transformListener_.waitForTransform(sensorFrameId_, generalParameters_.mapFrameId_, timeStamp, ros::Duration(1.0));
-
-    tf::StampedTransform transformTf;
-    transformListener_.lookupTransform(generalParameters_.mapFrameId_, sensorFrameId_, timeStamp, transformTf);
-    poseTFToEigen(transformTf, transformationSensorToMap_);
-
-    transformListener_.lookupTransform(generalParameters_.robotBaseFrameId_, sensorFrameId_, timeStamp,
-                                       transformTf);  // TODO(max): Why wrong direction?
-    Eigen::Affine3d transform;
-    poseTFToEigen(transformTf, transform);
-    rotationBaseToSensor_.setMatrix(transform.rotation().matrix());
-    translationBaseToSensorInBaseFrame_.toImplementation() = transform.translation();
-
-    transformListener_.lookupTransform(generalParameters_.mapFrameId_, generalParameters_.robotBaseFrameId_, timeStamp,
-                                       transformTf);  // TODO(max): Why wrong direction?
-    poseTFToEigen(transformTf, transform);
-    rotationMapToBase_.setMatrix(transform.rotation().matrix());
-    translationMapToBaseInMapFrame_.toImplementation() = transform.translation();
-
-    if (!firstTfAvailable_) {
-      firstTfAvailable_ = true;
-    }
-
-    return true;
-  } catch (tf::TransformException& ex) {
-    if (!firstTfAvailable_) {
-      return false;
-    }
-    ROS_ERROR("%s", ex.what());
-    return false;
-  }
+bool SensorProcessorBase::updateTransformations(
+    const RigidTransformd& sensorPoseInBaseFrame,
+    const RigidTransformd& robotBaseFramePoseInMapFrame) {
+  rotationBaseToSensor_ = sensorPoseInBaseFrame.rotation().inverse();
+  translationBaseToSensorInBaseFrame_ = sensorPoseInBaseFrame.translation();
+  rotationMapToBase_ = robotBaseFramePoseInMapFrame.rotation().inverse();
+  translationMapToBaseInMapFrame_ = robotBaseFramePoseInMapFrame.translation();
+  // X_MS = X_MB * X_BS
+  transformationSensorToMap_.linear() = (robotBaseFramePoseInMapFrame * sensorPoseInBaseFrame).rotation().matrix();
+  transformationSensorToMap_.translation() = (robotBaseFramePoseInMapFrame * sensorPoseInBaseFrame).translation();
+  return true;
 }
 
-bool SensorProcessorBase::transformPointCloud(PointCloudType::ConstPtr pointCloud, PointCloudType::Ptr pointCloudTransformed,
-                                              const std::string& targetFrame) {
-  ros::Time timeStamp;
-  timeStamp.fromNSec(1000 * pointCloud->header.stamp);
-  const std::string inputFrameId(pointCloud->header.frame_id);
+bool SensorProcessorBase::transformPointCloud(PointCloudType::ConstPtr pointCloud,
+                                              PointCloudType::Ptr pointCloudTransformed,
+                                              const RigidTransformd& transformPointCloudToTargetFrame) {
 
-  tf::StampedTransform transformTf;
-  try {
-    transformListener_.waitForTransform(targetFrame, inputFrameId, timeStamp, ros::Duration(1.0), ros::Duration(0.001));
-    transformListener_.lookupTransform(targetFrame, inputFrameId, timeStamp, transformTf);
-  } catch (tf::TransformException& ex) {
-    ROS_ERROR("%s", ex.what());
-    return false;
-  }
-
-  Eigen::Affine3d transform;
-  poseTFToEigen(transformTf, transform);
+  Eigen::Affine3d transform = transformPointCloudToTargetFrame.GetAsIsometry3();
   pcl::transformPointCloud(*pointCloud, *pointCloudTransformed, transform.cast<float>());
-  pointCloudTransformed->header.frame_id = targetFrame;
 
-  ROS_DEBUG_THROTTLE(5, "Point cloud transformed to frame %s for time stamp %f.", targetFrame.c_str(),
-                     pointCloudTransformed->header.stamp / 1000.0);
   return true;
 }
 
@@ -155,8 +117,12 @@ void SensorProcessorBase::removePointsOutsideLimits(PointCloudType::ConstPtr ref
   if (!std::isfinite(parameters.ignorePointsLowerThreshold_) && !std::isfinite(parameters.ignorePointsUpperThreshold_)) {
     return;
   }
-  ROS_DEBUG("Limiting point cloud to the height interval of [%f, %f] relative to the robot base.", parameters.ignorePointsLowerThreshold_,
-            parameters.ignorePointsUpperThreshold_);
+  drake::log()->debug(
+      "Limiting point cloud to the height interval of [{}, {}] "
+      "relative to the robot base.",
+      parameters.ignorePointsLowerThreshold_,
+      parameters.ignorePointsUpperThreshold_
+  );
 
   pcl::PassThrough<pcl::PointXYZRGBConfidenceRatio> passThroughFilter(true);
   passThroughFilter.setInputCloud(reference);
@@ -164,19 +130,22 @@ void SensorProcessorBase::removePointsOutsideLimits(PointCloudType::ConstPtr ref
   double relativeLowerThreshold = translationMapToBaseInMapFrame_.z() + parameters.ignorePointsLowerThreshold_;
   double relativeUpperThreshold = translationMapToBaseInMapFrame_.z() + parameters.ignorePointsUpperThreshold_;
   passThroughFilter.setFilterLimits(relativeLowerThreshold, relativeUpperThreshold);
-  pcl::IndicesPtr insideIndeces(new std::vector<int>);
-  passThroughFilter.filter(*insideIndeces);
+  pcl::IndicesPtr insideIndices(new pcl::Indices);
+  passThroughFilter.filter(*insideIndices);
 
   for (auto& pointCloud : pointClouds) {
     pcl::ExtractIndices<pcl::PointXYZRGBConfidenceRatio> extractIndicesFilter;
     extractIndicesFilter.setInputCloud(pointCloud);
-    extractIndicesFilter.setIndices(insideIndeces);
+    extractIndicesFilter.setIndices(insideIndices);
     PointCloudType tempPointCloud;
     extractIndicesFilter.filter(tempPointCloud);
     pointCloud->swap(tempPointCloud);
   }
 
-  ROS_DEBUG("removePointsOutsideLimits() reduced point cloud to %i points.", (int)pointClouds[0]->size());
+  drake::log()->debug(
+      "removePointsOutsideLimits() reduced point cloud to {} points.",
+      static_cast<int>(pointClouds[0]->size())
+  );
 }
 
 bool SensorProcessorBase::filterPointCloud(const PointCloudType::Ptr pointCloud) {
@@ -184,7 +153,7 @@ bool SensorProcessorBase::filterPointCloud(const PointCloudType::Ptr pointCloud)
   PointCloudType tempPointCloud;
 
   // Remove nan points.
-  std::vector<int> indices;
+  pcl::Indices indices;
   if (!pointCloud->is_dense) {
     pcl::removeNaNFromPointCloud(*pointCloud, tempPointCloud, indices);
     tempPointCloud.is_dense = true;
@@ -200,7 +169,10 @@ bool SensorProcessorBase::filterPointCloud(const PointCloudType::Ptr pointCloud)
     voxelGridFilter.filter(tempPointCloud);
     pointCloud->swap(tempPointCloud);
   }
-  ROS_DEBUG_THROTTLE(2, "cleanPointCloud() reduced point cloud to %i points.", static_cast<int>(pointCloud->size()));
+  drake::log()->debug(
+      "cleanPointCloud() reduced point cloud to {} points.",
+      static_cast<int>(pointCloud->size())
+  );
   return true;
 }
 

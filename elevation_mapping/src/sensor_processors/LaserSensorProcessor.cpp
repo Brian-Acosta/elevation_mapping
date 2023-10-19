@@ -15,6 +15,8 @@
 
 #include "elevation_mapping/PointXYZRGBConfidenceRatio.hpp"
 
+#include "drake/common/text_logging.h"
+
 namespace elevation_mapping {
 
 /*!
@@ -27,17 +29,13 @@ namespace elevation_mapping {
  * International Conference on Applied Robotics for the Power Industry (CARPI), 2012.
  */
 
-LaserSensorProcessor::LaserSensorProcessor(ros::NodeHandle& nodeHandle, const SensorProcessorBase::GeneralParameters& generalParameters)
-    : SensorProcessorBase(nodeHandle, generalParameters) {}
+LaserSensorProcessor::LaserSensorProcessor(const SensorProcessorBase::GeneralParameters& generalParameters)
+    : SensorProcessorBase(generalParameters) {}
 
 LaserSensorProcessor::~LaserSensorProcessor() = default;
 
-bool LaserSensorProcessor::readParameters() {
-  SensorProcessorBase::readParameters();
-  auto [parameters, parameterGuard]{parameters_.getDataToWrite()};
-  nodeHandle_.param("sensor_processor/min_radius", parameters.sensorParameters_["min_radius"], 0.0);
-  nodeHandle_.param("sensor_processor/beam_angle", parameters.sensorParameters_["beam_angle"], 0.0);
-  nodeHandle_.param("sensor_processor/beam_constant", parameters.sensorParameters_["beam_constant"], 0.0);
+bool LaserSensorProcessor::readParameters(const std::string& yaml_filename) {
+  drake::log()->warn("TODO: implement parameter reading from yaml");
   return true;
 }
 
@@ -51,17 +49,17 @@ bool LaserSensorProcessor::computeVariances(const PointCloudType::ConstPtr point
 
   // Sensor Jacobian (J_s).
   const Eigen::RowVector3f sensorJacobian =
-      projectionVector * (rotationMapToBase_.transposed() * rotationBaseToSensor_.transposed()).toImplementation().cast<float>();
+      projectionVector * (rotationMapToBase_.transpose() * rotationBaseToSensor_.transpose()).matrix().cast<float>();
 
   // Robot rotation covariance matrix (Sigma_q).
   Eigen::Matrix3f rotationVariance = robotPoseCovariance.bottomRightCorner(3, 3).cast<float>();
 
   // Preparations for robot rotation Jacobian (J_q) to minimize computation for every point in point cloud.
-  const Eigen::Matrix3f C_BM_transpose = rotationMapToBase_.transposed().toImplementation().cast<float>();
+  const Eigen::Matrix3f C_BM_transpose = rotationMapToBase_.transpose().matrix().cast<float>();
   const Eigen::RowVector3f P_mul_C_BM_transpose = projectionVector * C_BM_transpose;
-  const Eigen::Matrix3f C_SB_transpose = rotationBaseToSensor_.transposed().toImplementation().cast<float>();
+  const Eigen::Matrix3f C_SB_transpose = rotationBaseToSensor_.transpose().matrix().cast<float>();
   const Eigen::Matrix3f B_r_BS_skew =
-      kindr::getSkewMatrixFromVector(Eigen::Vector3f(translationBaseToSensorInBaseFrame_.toImplementation().cast<float>()));
+      getSkewMatrixFromVector(Eigen::Vector3f(translationBaseToSensorInBaseFrame_.matrix().cast<float>()));
 
   const float varianceNormal = parameters.sensorParameters_.at("min_radius") * parameters.sensorParameters_.at("min_radius");
   const float beamConstant = parameters.sensorParameters_.at("beam_constant");
@@ -85,7 +83,7 @@ bool LaserSensorProcessor::computeVariances(const PointCloudType::ConstPtr point
     sensorVariance.diagonal() << varianceLateral, varianceLateral, varianceNormal;
 
     // Robot rotation Jacobian (J_q).
-    const Eigen::Matrix3f C_SB_transpose_times_S_r_SP_skew = kindr::getSkewMatrixFromVector(Eigen::Vector3f(C_SB_transpose * pointVector));
+    const Eigen::Matrix3f C_SB_transpose_times_S_r_SP_skew = getSkewMatrixFromVector(Eigen::Vector3f(C_SB_transpose * pointVector));
     const Eigen::RowVector3f rotationJacobian = P_mul_C_BM_transpose * (C_SB_transpose_times_S_r_SP_skew + B_r_BS_skew);
 
     // Measurement variance for map (error propagation law).

@@ -23,25 +23,28 @@ namespace elevation_mapping {
  * C. V., Izadi, S., & Lovell, D., Modeling Kinect Sensor Noise for Improved 3D Reconstruction and Tracking, 2012.
  */
 
-StructuredLightSensorProcessor::StructuredLightSensorProcessor(ros::NodeHandle& nodeHandle,
-                                                               const SensorProcessorBase::GeneralParameters& generalParameters)
-    : SensorProcessorBase(nodeHandle, generalParameters) {}
+StructuredLightSensorProcessor::StructuredLightSensorProcessor(
+    const SensorProcessorBase::GeneralParameters& generalParameters)
+    : SensorProcessorBase(generalParameters) {
+  bool Structred_Light_Sensor_Processor_is_not_implemented = false;
+  DRAKE_DEMAND(Structred_Light_Sensor_Processor_is_not_implemented);
+}
 
 StructuredLightSensorProcessor::~StructuredLightSensorProcessor() = default;
 
-bool StructuredLightSensorProcessor::readParameters() {
-  SensorProcessorBase::readParameters();
+bool StructuredLightSensorProcessor::readParameters(const std::string& params_yaml) {
+  SensorProcessorBase::readParameters(params_yaml);
   auto [parameters, parameterGuard]{parameters_.getDataToWrite()};
-  nodeHandle_.param("sensor_processor/normal_factor_a", parameters.sensorParameters_["normal_factor_a"], 0.0);
-  nodeHandle_.param("sensor_processor/normal_factor_b", parameters.sensorParameters_["normal_factor_b"], 0.0);
-  nodeHandle_.param("sensor_processor/normal_factor_c", parameters.sensorParameters_["normal_factor_c"], 0.0);
-  nodeHandle_.param("sensor_processor/normal_factor_d", parameters.sensorParameters_["normal_factor_d"], 0.0);
-  nodeHandle_.param("sensor_processor/normal_factor_e", parameters.sensorParameters_["normal_factor_e"], 0.0);
-  nodeHandle_.param("sensor_processor/lateral_factor", parameters.sensorParameters_["lateral_factor"], 0.0);
-  nodeHandle_.param("sensor_processor/cutoff_min_depth", parameters.sensorParameters_["cutoff_min_depth"],
-                    std::numeric_limits<double>::min());
-  nodeHandle_.param("sensor_processor/cutoff_max_depth", parameters.sensorParameters_["cutoff_max_depth"],
-                    std::numeric_limits<double>::max());
+//  nodeHandle_.param("sensor_processor/normal_factor_a", parameters.sensorParameters_["normal_factor_a"], 0.0);
+//  nodeHandle_.param("sensor_processor/normal_factor_b", parameters.sensorParameters_["normal_factor_b"], 0.0);
+//  nodeHandle_.param("sensor_processor/normal_factor_c", parameters.sensorParameters_["normal_factor_c"], 0.0);
+//  nodeHandle_.param("sensor_processor/normal_factor_d", parameters.sensorParameters_["normal_factor_d"], 0.0);
+//  nodeHandle_.param("sensor_processor/normal_factor_e", parameters.sensorParameters_["normal_factor_e"], 0.0);
+//  nodeHandle_.param("sensor_processor/lateral_factor", parameters.sensorParameters_["lateral_factor"], 0.0);
+//  nodeHandle_.param("sensor_processor/cutoff_min_depth", parameters.sensorParameters_["cutoff_min_depth"],
+//                    std::numeric_limits<double>::min());
+//  nodeHandle_.param("sensor_processor/cutoff_max_depth", parameters.sensorParameters_["cutoff_max_depth"],
+//                    std::numeric_limits<double>::max());
   return true;
 }
 
@@ -55,17 +58,17 @@ bool StructuredLightSensorProcessor::computeVariances(const PointCloudType::Cons
 
   // Sensor Jacobian (J_s).
   const Eigen::RowVector3f sensorJacobian =
-      projectionVector * (rotationMapToBase_.transposed() * rotationBaseToSensor_.transposed()).toImplementation().cast<float>();
+      projectionVector * (rotationMapToBase_.transpose() * rotationBaseToSensor_.transpose()).matrix().cast<float>();
 
   // Robot rotation covariance matrix (Sigma_q).
   const Eigen::Matrix3f rotationVariance = robotPoseCovariance.bottomRightCorner(3, 3).cast<float>();
 
   // Preparations for robot rotation Jacobian (J_q) to minimize computation for every point in point cloud.
-  const Eigen::Matrix3f C_BM_transpose = rotationMapToBase_.transposed().toImplementation().cast<float>();
+  const Eigen::Matrix3f C_BM_transpose = rotationMapToBase_.transpose().matrix().cast<float>();
   const Eigen::RowVector3f P_mul_C_BM_transpose = projectionVector * C_BM_transpose;
-  const Eigen::Matrix3f C_SB_transpose = rotationBaseToSensor_.transposed().toImplementation().cast<float>();
+  const Eigen::Matrix3f C_SB_transpose = rotationBaseToSensor_.transpose().matrix().cast<float>();
   const Eigen::Matrix3f B_r_BS_skew =
-      kindr::getSkewMatrixFromVector(Eigen::Vector3f(translationBaseToSensorInBaseFrame_.toImplementation().cast<float>()));
+      getSkewMatrixFromVector(Eigen::Vector3f(translationBaseToSensorInBaseFrame_.matrix().cast<float>()));
   const float epsilon = std::numeric_limits<float>::min();
 
   for (unsigned int i = 0; i < pointCloud->size(); ++i) {
@@ -92,7 +95,7 @@ bool StructuredLightSensorProcessor::computeVariances(const PointCloudType::Cons
     sensorVariance.diagonal() << varianceLateral, varianceLateral, varianceNormal;
 
     // Robot rotation Jacobian (J_q).
-    const Eigen::Matrix3f C_SB_transpose_times_S_r_SP_skew = kindr::getSkewMatrixFromVector(Eigen::Vector3f(C_SB_transpose * pointVector));
+    const Eigen::Matrix3f C_SB_transpose_times_S_r_SP_skew = getSkewMatrixFromVector(Eigen::Vector3f(C_SB_transpose * pointVector));
     const Eigen::RowVector3f rotationJacobian = P_mul_C_BM_transpose * (C_SB_transpose_times_S_r_SP_skew + B_r_BS_skew);
 
     // Measurement variance for map (error propagation law).

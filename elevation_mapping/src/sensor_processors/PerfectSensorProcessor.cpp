@@ -24,14 +24,15 @@ namespace elevation_mapping {
  * Noiseless, perfect sensor.
  */
 
-PerfectSensorProcessor::PerfectSensorProcessor(ros::NodeHandle& nodeHandle, const SensorProcessorBase::GeneralParameters& generalParameters)
-    : SensorProcessorBase(nodeHandle, generalParameters) {}
+PerfectSensorProcessor::PerfectSensorProcessor(const SensorProcessorBase::GeneralParameters& generalParameters)
+    : SensorProcessorBase(generalParameters) {}
 
 PerfectSensorProcessor::~PerfectSensorProcessor() = default;
 
-bool PerfectSensorProcessor::readParameters() {
-  return SensorProcessorBase::readParameters();
+bool PerfectSensorProcessor::readParameters(const std::string& yaml_filename) {
+  return SensorProcessorBase::readParameters(yaml_filename);
 }
+
 
 bool PerfectSensorProcessor::computeVariances(const PointCloudType::ConstPtr pointCloud,
                                               const Eigen::Matrix<double, 6, 6>& robotPoseCovariance, Eigen::VectorXf& variances) {
@@ -42,17 +43,17 @@ bool PerfectSensorProcessor::computeVariances(const PointCloudType::ConstPtr poi
 
   // Sensor Jacobian (J_s).
   const Eigen::RowVector3f sensorJacobian =
-      projectionVector * (rotationMapToBase_.transposed() * rotationBaseToSensor_.transposed()).toImplementation().cast<float>();
+      projectionVector * (rotationMapToBase_.transpose() * rotationBaseToSensor_.transpose()).matrix().cast<float>();
 
   // Robot rotation covariance matrix (Sigma_q).
   const Eigen::Matrix3f rotationVariance = robotPoseCovariance.bottomRightCorner(3, 3).cast<float>();
 
   // Preparations for robot rotation Jacobian (J_q) to minimize computation for every point in point cloud.
-  const Eigen::Matrix3f C_BM_transpose = rotationMapToBase_.transposed().toImplementation().cast<float>();
+  const Eigen::Matrix3f C_BM_transpose = rotationMapToBase_.transpose().matrix().cast<float>();
   const Eigen::RowVector3f P_mul_C_BM_transpose = projectionVector * C_BM_transpose;
-  const Eigen::Matrix3f C_SB_transpose = rotationBaseToSensor_.transposed().toImplementation().cast<float>();
+  const Eigen::Matrix3f C_SB_transpose = rotationBaseToSensor_.transpose().matrix().cast<float>();
   const Eigen::Matrix3f B_r_BS_skew =
-      kindr::getSkewMatrixFromVector(Eigen::Vector3f(translationBaseToSensorInBaseFrame_.toImplementation().cast<float>()));
+      getSkewMatrixFromVector(Eigen::Vector3f(translationBaseToSensorInBaseFrame_.matrix().cast<float>()));
 
   for (unsigned int i = 0; i < pointCloud->size(); ++i) {
     // For every point in point cloud.
@@ -69,7 +70,7 @@ bool PerfectSensorProcessor::computeVariances(const PointCloudType::ConstPtr poi
     sensorVariance.diagonal() << varianceLateral, varianceLateral, varianceNormal;
 
     // Robot rotation Jacobian (J_q).
-    const Eigen::Matrix3f C_SB_transpose_times_S_r_SP_skew = kindr::getSkewMatrixFromVector(Eigen::Vector3f(C_SB_transpose * pointVector));
+    const Eigen::Matrix3f C_SB_transpose_times_S_r_SP_skew = getSkewMatrixFromVector(Eigen::Vector3f(C_SB_transpose * pointVector));
     const Eigen::RowVector3f rotationJacobian = P_mul_C_BM_transpose * (C_SB_transpose_times_S_r_SP_skew + B_r_BS_skew);
 
     // Measurement variance for map (error propagation law).

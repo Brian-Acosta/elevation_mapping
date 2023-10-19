@@ -22,7 +22,7 @@ class LaserSensorProcessor : public SensorProcessorBase {
    * Constructor.
    * @param nodeHandle the ROS node handle.
    */
-  LaserSensorProcessor(ros::NodeHandle& nodeHandle, const SensorProcessorBase::GeneralParameters& generalParameters);
+  LaserSensorProcessor(const SensorProcessorBase::GeneralParameters& generalParameters);
 
   /*!
    * Destructor.
@@ -34,7 +34,7 @@ class LaserSensorProcessor : public SensorProcessorBase {
    * Reads and verifies the parameters.
    * @return true if successful.
    */
-  bool readParameters() override;
+  bool readParameters(const std::string& yaml_filename) override;
 
   /*!
    * Computes the elevation map height variances for each point in a point cloud with the

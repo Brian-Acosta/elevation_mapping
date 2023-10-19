@@ -50,7 +50,6 @@ class SensorProcessorBase {
 
   /*!
    * Constructor.
-   * @param nodeHandle the ROS node handle.
    * @param generalConfig General parameters that the sensor processor must know in order to work. // TODO (magnus) improve documentation.
    */
   SensorProcessorBase(const GeneralParameters& generalConfig);
@@ -72,8 +71,8 @@ class SensorProcessorBase {
                const Eigen::Matrix<double, 6, 6>& robotPoseCovariance,
                PointCloudType::Ptr pointCloudMapFrame,
                Eigen::VectorXf& variances,
-               drake::math::RigidTransformd sensorPoseInBaseFrame,
-               drake::math::RigidTransformd robotBaseFramePoseInMapFrame);
+               const drake::math::RigidTransformd& sensorPoseInBaseFrame,
+               const drake::math::RigidTransformd& robotBaseFramePoseInMapFrame);
 
   /*!
    * Checks if a valid tf transformation was received since startup.
@@ -82,6 +81,18 @@ class SensorProcessorBase {
   bool isTfAvailableInBuffer() const { return firstTfAvailable_; }
 
  protected:
+
+  /*!
+ * \brief Gets a skew-symmetric matrix from a (column) vector
+ * \param   vec 3x1-matrix (column vector)
+ * \return skew   3x3-matrix
+ */
+  template<typename PrimType_>
+  inline static Eigen::Matrix<PrimType_, 3, 3> getSkewMatrixFromVector(const Eigen::Matrix<PrimType_, 3, 1>& vec) {
+    Eigen::Matrix<PrimType_, 3, 3> mat;
+    mat << 0, -vec(2), vec(1), vec(2), 0, -vec(0), -vec(1), vec(0), 0;
+    return mat;
+  }
 
   /*!
    * Update the transformations for a given time stamp.
@@ -135,7 +146,7 @@ class SensorProcessorBase {
    */
   bool transformPointCloud(PointCloudType::ConstPtr pointCloud,
                            PointCloudType::Ptr pointCloudTransformed,
-                           const std::string& targetFrame);
+                           const drake::math::RigidTransformd& transformPointCloudToTargetFrame);
 
   /*!
    * Removes points with z-coordinate above a limit in map frame.
