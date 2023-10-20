@@ -2,8 +2,8 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 
 def drake_repository(
-        drake_commit = "v1.21.0",
-        drake_checksum = "6571295843aff8e11620340739bf5eab7a25130f8f06667b2d3e6df85567509a"):
+        drake_commit = "v1.22.0",
+        drake_checksum = "78cf62c177c41f8415ade172c1e6eb270db619f07c4b043d5148e1f35be8da09"):
     maybe(
         http_archive,
         name = "drake",

@@ -1,3 +1,5 @@
+common --enable_platform_specific_config
+
 # Optimize
 build --compilation_mode opt
 build --copt -g
@@ -6,7 +8,13 @@ build --keep_going
 
 # Fix the wrong default to generate __init__.py to delimit a Python package.
 build --incompatible_default_to_explicit_init_py
-build --cxxopt='-std=c++17'
+
+# Use appropriate C++ version
+build:linux --cxxopt=-std=c++17
+build:linux --host_cxxopt=-std=c++17
+
+build:macos --cxxopt=-std=c++20
+build:maocs --host_cxxopt=-std=c++20
 
 # Ensure that you don't accidentally make non-hermetic actions/tests
 # which depend on remote services. Tag an individual target with

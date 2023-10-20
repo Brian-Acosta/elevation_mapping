@@ -559,7 +559,7 @@ void ElevationMap::move(const Eigen::Vector2d& position) {
   std::vector<grid_map::BufferRegion> newRegions;
 
   if (rawMap_.move(position, newRegions)) {
-    drake::log()->debug("Elevation map has been moved to position ({}, {}}).",
+    drake::log()->debug("Elevation map has been moved to position ({}, {}).",
                         rawMap_.getPosition().x(), rawMap_.getPosition().y());
 
     // The "dynamic_time" layer is meant to be interpreted as integer values, therefore nan:s need to be zeroed.
