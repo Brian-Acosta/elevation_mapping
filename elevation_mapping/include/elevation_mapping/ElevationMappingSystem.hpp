@@ -6,23 +6,47 @@
 
 // Drake
 #include "drake/systems/framework/leaf_system.h"
+#include "drake/multibody/plant/multibody_plant.h"
 
 namespace elevation_mapping {
 
+struct sensor_pose_params {
+  std::string sensor_name_;
+  std::string sensor_parent_body_;
+  drake::math::RigidTransformd sensor_pose_in_parent_body_;
+};
+
 class ElevationMappingSystem : public drake::systems::LeafSystem<double> {
  public:
-  ElevationMappingSystem();
+  DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(ElevationMappingSystem);
+
+  ElevationMappingSystem(const drake::multibody::MultibodyPlant<double>& plant,
+                         drake::systems::Context<double>* context,
+                         const std::vector<sensor_pose_params>& sensor_poses);
 
  private:
 
   drake::systems::EventStatus PeriodicUnrestrictedUpdateEvent(
       const drake::systems::Context<double>& context,
-      drake::systems::State<double>* state);
+      drake::systems::State<double>* state) const;
 
-  drake::systems::InputPortIndex point_cloud_input_port_;
-  drake::systems::InputPortIndex robot_state_input_port_;
-  drake::systems::InputPortIndex robot_pose_covariance_input_port_;
-  
+  void CopyElevationMap(const drake::systems::Context<double>& context,
+                        ElevationMap* map) const;
+
+  // multibody
+  const drake::multibody::MultibodyPlant<double>& plant_;
+  drake::systems::Context<double>* context_;
+  std::map<std::string, sensor_pose_params> sensor_poses_;
+
+  // ports
+  std::map<std::string, drake::systems::InputPortIndex> input_ports_pcl_;
+  drake::systems::InputPortIndex input_port_robot_state_;
+  drake::systems::InputPortIndex input_port_pose_covariance_;
+  drake::systems::OutputPortIndex output_port_elevation_map_;
+
+  // states
+  drake::systems::AbstractStateIndex map_state_index_;
+
 };
 
 }

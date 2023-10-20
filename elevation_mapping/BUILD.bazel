@@ -1,6 +1,19 @@
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
+    name = "elevtion_mapping_system",
+    srcs = ["src/ElevationMappingSystem.cpp"],
+    hdrs = ["include/elevation_mapping/ElevationMappingSystem.hpp"],
+    strip_include_prefix = "include",
+    deps = [
+        ":elevation_map",
+        ":robot_motion_map_updater",
+        ":sensor_processors",
+        "@drake//:drake_shared_library",
+    ],
+)
+
+cc_library(
     name = "elevation_mapping_headers",
     hdrs = [
         "include/elevation_mapping/ElevationMapFunctors.hpp",
