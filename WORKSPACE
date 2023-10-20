@@ -10,7 +10,7 @@ add_default_workspace()
 
 load("@grid_map//tools/workspace:deps.bzl", "add_grid_map_dependencies")
 
-add_grid_map_dependencies()
+add_grid_map_dependencies(excludes = ["gtest"])
 
 load("@rules_pcl//bzl:repositories.bzl", "pcl_repositories")
 
