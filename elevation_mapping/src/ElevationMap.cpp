@@ -52,6 +52,13 @@ ElevationMap::ElevationMap(const std::string& parameter_yaml)
       fusedMap_({"elevation", "upper_bound", "lower_bound", "color"}),
       hasUnderlyingMap_(false) {
 
+  // Should be copy-constructable or Cloneable to be used as a Drake
+  // AbstractState. If memory allocation proves to be a pain-point,
+  // might need to rethink this strategy  but for now we will
+  // just require that the default copy constructor exists.
+  static_assert(std::is_copy_constructible_v<ElevationMap>);
+  static_assert(std::is_copy_assignable_v<ElevationMap>);
+
   if (not parameter_yaml.empty()) {
     bool parameter_loading_success = loadParams(parameter_yaml);
     DRAKE_DEMAND(parameter_loading_success);
@@ -66,8 +73,8 @@ ElevationMap::~ElevationMap() = default;
 void ElevationMap::setGeometry(const grid_map::Length& length,
                                const double& resolution,
                                const grid_map::Position& position) {
-  boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
-  boost::recursive_mutex::scoped_lock scopedLockForFusedData(fusedMapMutex_);
+//  boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
+//  boost::recursive_mutex::scoped_lock scopedLockForFusedData(fusedMapMutex_);
   rawMap_.setGeometry(length, resolution, position);
   fusedMap_.setGeometry(length, resolution, position);
   drake::log()->info(
@@ -80,7 +87,7 @@ bool ElevationMap::add(const PointCloudType::Ptr pointCloud,
                        Eigen::VectorXf& pointCloudVariances,
                        double timestamp,
                        const drake::math::RigidTransformd& transformationSensorToMap) {
-  const Parameters parameters{parameters_.getData()};
+  const Parameters parameters{parameters_};
   if (static_cast<unsigned int>(pointCloud->size()) != static_cast<unsigned int>(pointCloudVariances.size())) {
     drake::log()->error(
         "ElevationMap::add: Size of point cloud {} and variances {} do not agree.",
@@ -96,7 +103,7 @@ bool ElevationMap::add(const PointCloudType::Ptr pointCloud,
     intAsFloat(static_cast<uint32_t>(static_cast<uint64_t>(timestamp)))
   };
 
-  boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
+//  boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
 
   // Update initial time if it is not initialized.
   if (initialTime_ < 0) {
@@ -217,7 +224,7 @@ bool ElevationMap::update(const grid_map::Matrix& varianceUpdate,
                           const grid_map::Matrix& horizontalVarianceUpdateY,
                           const grid_map::Matrix& horizontalVarianceUpdateXY,
                           double time) {
-  boost::recursive_mutex::scoped_lock scopedLock(rawMapMutex_);
+//  boost::recursive_mutex::scoped_lock scopedLock(rawMapMutex_);
 
   const auto& size = rawMap_.getSize();
 
@@ -241,7 +248,7 @@ bool ElevationMap::update(const grid_map::Matrix& varianceUpdate,
 
 bool ElevationMap::fuseAll() {
   drake::log()->debug("Requested to fuse entire elevation map.");
-  boost::recursive_mutex::scoped_lock scopedLock(fusedMapMutex_);
+//  boost::recursive_mutex::scoped_lock scopedLock(fusedMapMutex_);
   return fuse(grid_map::Index(0, 0), fusedMap_.getSize());
 }
 
@@ -260,7 +267,7 @@ bool ElevationMap::fuseArea(const Eigen::Vector2d& position, const Eigen::Array2
   grid_map::Length submapLength;
   grid_map::Index requestedIndexInSubmap;
 
-  boost::recursive_mutex::scoped_lock scopedLock(fusedMapMutex_);
+//  boost::recursive_mutex::scoped_lock scopedLock(fusedMapMutex_);
 
   grid_map::getSubmapInformation(topLeftIndex, submapBufferSize, submapPosition, submapLength, requestedIndexInSubmap, position, length,
                                  rawMap_.getLength(), rawMap_.getPosition(), rawMap_.getResolution(), rawMap_.getSize(),
@@ -280,11 +287,11 @@ bool ElevationMap::fuse(const grid_map::Index& topLeftIndex, const grid_map::Ind
   auto methodStartTime = std::chrono::high_resolution_clock::now();
 
   // Copy raw elevation map data for safe multi-threading.
-  boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
+//  boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
   auto rawMapCopy = rawMap_;
-  scopedLockForRawData.unlock();
+//  scopedLockForRawData.unlock();
 
-  boost::recursive_mutex::scoped_lock scopedLock(fusedMapMutex_);
+//  boost::recursive_mutex::scoped_lock scopedLock(fusedMapMutex_);
 
   // More initializations.
   const double halfResolution = fusedMap_.getResolution() / 2.0;
@@ -439,13 +446,13 @@ bool ElevationMap::fuse(const grid_map::Index& topLeftIndex, const grid_map::Ind
 bool ElevationMap::clear() {
   // Lock raw and fused map object in different scopes to prevent deadlock.
   {
-    boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
+//    boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
     rawMap_.clearAll();
     rawMap_.resetTimestamp();
     rawMap_.get("dynamic_time").setZero();
   }
   {
-    boost::recursive_mutex::scoped_lock scopedLockForFusedData(fusedMapMutex_);
+//    boost::recursive_mutex::scoped_lock scopedLockForFusedData(fusedMapMutex_);
     fusedMap_.clearAll();
     fusedMap_.resetTimestamp();
   }
@@ -453,20 +460,20 @@ bool ElevationMap::clear() {
 }
 
 void ElevationMap::visibilityCleanup(double updatedTime) {
-  const Parameters parameters{parameters_.getData()};
+  const Parameters parameters{parameters_};
   // Get current time to compute calculation time.
   const auto methodStartTime = std::chrono::high_resolution_clock::now();
   const double timeSinceInitialization = updatedTime - initialTime_;
 
   // Copy raw elevation map data for safe multi-threading.
-  boost::recursive_mutex::scoped_lock scopedLockForVisibilityCleanupData(visibilityCleanupMapMutex_);
-  boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
+//  boost::recursive_mutex::scoped_lock scopedLockForVisibilityCleanupData(visibilityCleanupMapMutex_);
+//  boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
   visibilityCleanupMap_ = rawMap_;
   rawMap_.clear("lowest_scan_point");
   rawMap_.clear("sensor_x_at_lowest_scan");
   rawMap_.clear("sensor_y_at_lowest_scan");
   rawMap_.clear("sensor_z_at_lowest_scan");
-  scopedLockForRawData.unlock();
+//  scopedLockForRawData.unlock();
   visibilityCleanupMap_.add("max_height");
 
   // Create max. height layer with ray tracing.
@@ -528,7 +535,7 @@ void ElevationMap::visibilityCleanup(double updatedTime) {
   }
 
   // Remove points in current raw map.
-  scopedLockForRawData.lock();
+//  scopedLockForRawData.lock();
   for (const auto& cellPosition : cellPositionsToRemove) {
     grid_map::Index index;
     if (!rawMap_.getIndex(cellPosition, index)) {
@@ -539,7 +546,7 @@ void ElevationMap::visibilityCleanup(double updatedTime) {
       rawMap_.at("dynamic_time", index) = 0.0f;
     }
   }
-  scopedLockForRawData.unlock();
+//  scopedLockForRawData.unlock();
 
   const auto duration = std::chrono::high_resolution_clock::now() - methodStartTime;
   drake::log()->debug(
@@ -555,7 +562,7 @@ void ElevationMap::visibilityCleanup(double updatedTime) {
 }
 
 void ElevationMap::move(const Eigen::Vector2d& position) {
-  boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
+//  boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
   std::vector<grid_map::BufferRegion> newRegions;
 
   if (rawMap_.move(position, newRegions)) {
@@ -577,7 +584,7 @@ grid_map::GridMap& ElevationMap::getRawGridMap() {
 }
 
 void ElevationMap::setRawGridMap(const grid_map::GridMap& map) {
-  boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
+//  boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
   rawMap_ = map;
 }
 
@@ -586,7 +593,7 @@ grid_map::GridMap& ElevationMap::getFusedGridMap() {
 }
 
 void ElevationMap::setFusedGridMap(const grid_map::GridMap& map) {
-  boost::recursive_mutex::scoped_lock scopedLockForFusedData(fusedMapMutex_);
+//  boost::recursive_mutex::scoped_lock scopedLockForFusedData(fusedMapMutex_);
   fusedMap_ = map;
 }
 
@@ -595,7 +602,7 @@ double ElevationMap::getTimeOfLastUpdate() {
 }
 
 double ElevationMap::getTimeOfLastFusion() {
-  boost::recursive_mutex::scoped_lock scopedLock(fusedMapMutex_);
+//  boost::recursive_mutex::scoped_lock scopedLock(fusedMapMutex_);
   return fusedMap_.getTimestamp() * 1e-9;
 }
 
@@ -613,17 +620,17 @@ bool ElevationMap::getPosition3dInRobotParentFrame(
   return true;
 }
 
-boost::recursive_mutex& ElevationMap::getFusedDataMutex() {
-  return fusedMapMutex_;
-}
-
-boost::recursive_mutex& ElevationMap::getRawDataMutex() {
-  return rawMapMutex_;
-}
+//boost::recursive_mutex& ElevationMap::getFusedDataMutex() {
+//  return fusedMapMutex_;
+//}
+//
+//boost::recursive_mutex& ElevationMap::getRawDataMutex() {
+//  return rawMapMutex_;
+//}
 
 bool ElevationMap::clean() {
-  const Parameters parameters{parameters_.getData()};
-  boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
+  const Parameters parameters{parameters_};
+//  boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
   rawMap_.get("variance") =
       rawMap_.get("variance").unaryExpr(VarianceClampOperator<float>(parameters.minVariance_, parameters.maxVariance_));
   rawMap_.get("horizontal_variance_x") =
@@ -636,7 +643,7 @@ bool ElevationMap::clean() {
 }
 
 void ElevationMap::resetFusedData() {
-  boost::recursive_mutex::scoped_lock scopedLockForFusedData(fusedMapMutex_);
+//  boost::recursive_mutex::scoped_lock scopedLockForFusedData(fusedMapMutex_);
   fusedMap_.clearAll();
   fusedMap_.resetTimestamp();
 }
@@ -656,7 +663,7 @@ const std::string& ElevationMap::getFrameId() {
 }
 
 void ElevationMap::updateUnderlyingMap(const grid_map::GridMap& underlyingMap) {
-  const Parameters parameters{parameters_.getData()};
+  const Parameters parameters{parameters_};
   drake::log()->info("Updating underlying map.");
 
   DRAKE_DEMAND(underlyingMap.getFrameId() == rawMap_.getFrameId());
@@ -689,7 +696,7 @@ void ElevationMap::setRawSubmapHeight(const grid_map::Position& initPosition,
                                       double lengthInYSubmap) {
   // Set a submap area (lengthInYSubmap, lengthInXSubmap) with a constant
   // height (mapHeight) and variance.
-  boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
+//  boost::recursive_mutex::scoped_lock scopedLockForRawData(rawMapMutex_);
 
   // Calculate submap iterator start index.
   const grid_map::Position topLeftPosition(initPosition(0) + lengthInXSubmap / 2, initPosition(1) + lengthInYSubmap / 2);

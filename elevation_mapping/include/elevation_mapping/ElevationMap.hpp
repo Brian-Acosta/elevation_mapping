@@ -165,17 +165,19 @@ class ElevationMap {
   bool getPosition3dInRobotParentFrame(const Eigen::Array2i& index,
                                        Eigen::Vector3d& position);
 
-  /*!
+
+  /*
+   * Since we are using ElevationMap within the drake systems framework,
+   * we will keep its default copy constructor and let the systems framework
+   * handle thread safety.
+   *
+   *!
    * Gets the fused data mutex.
    * @return reference to the fused data mutex.
-   */
-  boost::recursive_mutex& getFusedDataMutex();
 
-  /*!
-   * Gets the raw data mutex.
-   * @return reference to the raw data mutex.
-   */
-  boost::recursive_mutex& getRawDataMutex();
+    boost::recursive_mutex& getFusedDataMutex();
+    boost::recursive_mutex& getRawDataMutex();
+    */
 
   /*!
    * Set the frame id.
@@ -284,6 +286,11 @@ class ElevationMap {
   //! Pose of the elevation map frame w.r.t. the inertial parent frame of the robot (e.g. world, map etc.).
   drake::math::RigidTransformd pose_;
 
+  /*
+   * Since we are using ElevationMap within the drake systems framework,
+   * we will keep its default copy constructor and let the systems framework
+   * handle thread safety.
+   *
   //! Mutex lock for fused map.
   boost::recursive_mutex fusedMapMutex_;
 
@@ -292,6 +299,7 @@ class ElevationMap {
 
   //! Mutex lock for visibility cleanup map.
   boost::recursive_mutex visibilityCleanupMapMutex_;
+  */
 
   //! Initial time
   double initialTime_ = -1;
@@ -311,7 +319,7 @@ class ElevationMap {
     double scanningDuration_{1.0};
     double increaseHeightAlpha_{1.0};
   };
-  ThreadSafeDataWrapper<Parameters> parameters_;
+  Parameters parameters_;
 };
 
 }  // namespace elevation_mapping

@@ -16,6 +16,11 @@ RobotMotionMapUpdater::RobotMotionMapUpdater() : covarianceScale_(1.0) {
   previousReducedCovariance_.setZero();
   previousUpdateTime_ = 0;
   // TODO(max): How to initialize previousRobotPose_?
+
+  // So we can store RobotMotionMapUpdater as a drake AbstractState,
+  // make sure we don't delete the copy constructor or copy assignment operator
+  static_assert(std::is_copy_constructible_v<RobotMotionMapUpdater>);
+  static_assert(std::is_copy_assignable_v<RobotMotionMapUpdater>);
 }
 
 RobotMotionMapUpdater::~RobotMotionMapUpdater() = default;
