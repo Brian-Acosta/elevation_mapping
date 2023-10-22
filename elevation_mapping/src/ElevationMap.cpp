@@ -217,11 +217,11 @@ bool ElevationMap::add(const PointCloudType::Ptr pointCloud,
   clean();
   rawMap_.setTimestamp(1e9 * timestamp);  // Point cloud stores time in nanoseconds.
 
-  const auto duration = std::chrono::duration_cast<std::chrono::seconds>(
+  double duration = static_cast<std::chrono::duration<double>>(
       std::chrono::high_resolution_clock::now() - methodStartTime
-    );
+    ).count();
   drake::log()->info(
-      "Raw map has been updated with a new point cloud in {} s.", duration.count()
+      "Raw map has been updated with a new point cloud in {} s.", duration
   );
   return true;
 }
