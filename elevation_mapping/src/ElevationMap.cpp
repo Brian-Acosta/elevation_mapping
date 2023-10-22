@@ -72,6 +72,7 @@ ElevationMap::~ElevationMap() = default;
 
 bool ElevationMap::loadParams(const std::string& parameter_yaml) {
   drake::log()->warn("Param yaml not yet implemented for ElevationMap");
+  return true;
 }
 
 void ElevationMap::setGeometry(const grid_map::Length& length,
@@ -216,7 +217,9 @@ bool ElevationMap::add(const PointCloudType::Ptr pointCloud,
   clean();
   rawMap_.setTimestamp(1e9 * timestamp);  // Point cloud stores time in nanoseconds.
 
-  const auto duration = std::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - methodStartTime);
+  const auto duration = std::chrono::duration_cast<std::chrono::seconds>(
+      std::chrono::high_resolution_clock::now() - methodStartTime
+    );
   drake::log()->info(
       "Raw map has been updated with a new point cloud in {} s.", duration.count()
   );
