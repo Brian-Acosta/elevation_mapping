@@ -70,6 +70,10 @@ ElevationMap::ElevationMap(const std::string& parameter_yaml)
 
 ElevationMap::~ElevationMap() = default;
 
+bool ElevationMap::loadParams(const std::string& parameter_yaml) {
+  drake::log()->warn("Param yaml not yet implemented for ElevationMap");
+}
+
 void ElevationMap::setGeometry(const grid_map::Length& length,
                                const double& resolution,
                                const grid_map::Position& position) {
