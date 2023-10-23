@@ -34,7 +34,7 @@ class StereoSensorProcessor : public SensorProcessorBase {
    */
   ~StereoSensorProcessor() override;
 
- private:
+ protected:
   /*!
    * Reads and verifies the parameters.
    * @return true if successful.
