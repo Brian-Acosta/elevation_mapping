@@ -15,6 +15,7 @@
 #include <pcl/filters/filter.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/crop_box.h>
 #include <pcl/pcl_base.h>
 #include <pcl/point_cloud.h>
 
@@ -24,6 +25,7 @@ template class pcl::VoxelGrid<pcl::PointXYZRGBConfidenceRatio>;  // NOLINT(cppco
 template void pcl::removeNaNFromPointCloud<pcl::PointXYZRGBConfidenceRatio>(const pcl::PointCloud<pcl::PointXYZRGBConfidenceRatio>& cloud_in, pcl::PointCloud<pcl::PointXYZRGBConfidenceRatio>& cloud_out, pcl::Indices& index);
 template class pcl::ExtractIndices<pcl::PointXYZRGBConfidenceRatio>;
 template class pcl::PassThrough<pcl::PointXYZRGBConfidenceRatio>;
+template class pcl::CropBox<pcl::PointXYZRGBConfidenceRatio>;
 
 std::ostream& operator<<(std::ostream& os, const pcl::PointXYZRGBConfidenceRatio& p) {
   os << "(" << p.x << "," << p.y << "," << p.z << " - " << static_cast<int>(p.r) << ","  // NOLINT(cppcoreguidelines-pro-type-union-access)
