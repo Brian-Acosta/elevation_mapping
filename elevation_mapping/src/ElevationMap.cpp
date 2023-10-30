@@ -586,7 +586,7 @@ void ElevationMap::move(const Eigen::Vector2d& position) {
   }
 }
 
-grid_map::GridMap& ElevationMap::getRawGridMap() {
+const grid_map::GridMap& ElevationMap::getRawGridMap() const {
   return rawMap_;
 }
 
@@ -595,7 +595,7 @@ void ElevationMap::setRawGridMap(const grid_map::GridMap& map) {
   rawMap_ = map;
 }
 
-grid_map::GridMap& ElevationMap::getFusedGridMap() {
+const grid_map::GridMap& ElevationMap::getFusedGridMap() const {
   return fusedMap_;
 }
 

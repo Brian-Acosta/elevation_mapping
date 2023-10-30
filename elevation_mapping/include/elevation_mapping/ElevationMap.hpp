@@ -117,7 +117,7 @@ class ElevationMap {
    * Gets a reference to the raw grid map.
    * @return the raw grid map.
    */
-  grid_map::GridMap& getRawGridMap();
+  const grid_map::GridMap& getRawGridMap() const;
 
   /*!
    * Sets a raw grid map.
@@ -129,7 +129,7 @@ class ElevationMap {
    * Gets a reference to the fused grid map.
    * @return the fused grid map.
    */
-  grid_map::GridMap& getFusedGridMap();
+  const grid_map::GridMap& getFusedGridMap() const;
 
   /*!
    * Sets a fused grid map.
