@@ -80,16 +80,18 @@ bool StructuredLightSensorProcessor::computeVariances(const PointCloudType::Cons
     Eigen::Vector3f pointVector(point.x, point.y, point.z);  // S_r_SP // NOLINT(cppcoreguidelines-pro-type-union-access)
 
     // Measurement distance.
-    const float measurementDistance = pointVector.z();
+    const float depth = pointVector.z();
 
     // Compute sensor covariance matrix (Sigma_S) with sensor model.
+    // sigma_z = a + b * (z - c)^2 + d * z^e
+    // noise = depth^2 gives a = 0, b = 1, c = 0, d = 0, e = 0
+    const float depth_zero = depth  - parameters.sensorParameters_.at("normal_factor_c");
     const float deviationNormal =
         parameters.sensorParameters_.at("normal_factor_a") +
-        parameters.sensorParameters_.at("normal_factor_b") * (measurementDistance - parameters.sensorParameters_.at("normal_factor_c")) *
-            (measurementDistance - parameters.sensorParameters_.at("normal_factor_c")) +
-        parameters.sensorParameters_.at("normal_factor_d") * pow(measurementDistance, parameters.sensorParameters_.at("normal_factor_e"));
+        parameters.sensorParameters_.at("normal_factor_b") * depth_zero * depth_zero +
+        parameters.sensorParameters_.at("normal_factor_d") * pow(depth, parameters.sensorParameters_.at("normal_factor_e"));
     const float varianceNormal = deviationNormal * deviationNormal;
-    const float deviationLateral = parameters.sensorParameters_.at("lateral_factor") * measurementDistance;
+    const float deviationLateral = parameters.sensorParameters_.at("lateral_factor") * depth;
     const float varianceLateral = deviationLateral * deviationLateral;
     Eigen::Matrix3f sensorVariance = Eigen::Matrix3f::Zero();
     sensorVariance.diagonal() << varianceLateral, varianceLateral, varianceNormal;
@@ -99,8 +101,7 @@ bool StructuredLightSensorProcessor::computeVariances(const PointCloudType::Cons
     const Eigen::RowVector3f rotationJacobian = P_mul_C_BM_transpose * (C_SB_transpose_times_S_r_SP_skew + B_r_BS_skew);
 
     // Measurement variance for map (error propagation law).
-    float heightVariance = 0.0;  // sigma_p
-    heightVariance = rotationJacobian * rotationVariance * rotationJacobian.transpose();
+    float heightVariance = rotationJacobian * rotationVariance * rotationJacobian.transpose();
     // Scale the sensor variance by the inverse, squared confidence ratio
     heightVariance +=
         static_cast<float>(sensorJacobian * sensorVariance * sensorJacobian.transpose()) / (epsilon + confidenceRatio * confidenceRatio);
