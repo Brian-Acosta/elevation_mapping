@@ -29,7 +29,7 @@ class StructuredLightSensorProcessor : public SensorProcessorBase {
    */
   ~StructuredLightSensorProcessor() override;
 
- private:
+ protected:
   /*!
    * Reads and verifies the parameters.
    * @return true if successful.
