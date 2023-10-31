@@ -15,6 +15,8 @@
 #include "elevation_mapping/PointXYZRGBConfidenceRatio.hpp"
 #include "elevation_mapping/sensor_processors/StructuredLightSensorProcessor.hpp"
 
+#include "drake/common/yaml/yaml_io.h"
+
 namespace elevation_mapping {
 
 /*! StructuredLight-type (structured light) sensor model:
@@ -35,16 +37,29 @@ StructuredLightSensorProcessor::~StructuredLightSensorProcessor() = default;
 bool StructuredLightSensorProcessor::readParameters(const std::string& params_yaml) {
   SensorProcessorBase::readParameters(params_yaml);
   auto [parameters, parameterGuard]{parameters_.getDataToWrite()};
-//  nodeHandle_.param("sensor_processor/normal_factor_a", parameters.sensorParameters_["normal_factor_a"], 0.0);
-//  nodeHandle_.param("sensor_processor/normal_factor_b", parameters.sensorParameters_["normal_factor_b"], 0.0);
-//  nodeHandle_.param("sensor_processor/normal_factor_c", parameters.sensorParameters_["normal_factor_c"], 0.0);
-//  nodeHandle_.param("sensor_processor/normal_factor_d", parameters.sensorParameters_["normal_factor_d"], 0.0);
-//  nodeHandle_.param("sensor_processor/normal_factor_e", parameters.sensorParameters_["normal_factor_e"], 0.0);
-//  nodeHandle_.param("sensor_processor/lateral_factor", parameters.sensorParameters_["lateral_factor"], 0.0);
-//  nodeHandle_.param("sensor_processor/cutoff_min_depth", parameters.sensorParameters_["cutoff_min_depth"],
-//                    std::numeric_limits<double>::min());
-//  nodeHandle_.param("sensor_processor/cutoff_max_depth", parameters.sensorParameters_["cutoff_max_depth"],
-//                    std::numeric_limits<double>::max());
+
+  // Drake's yaml loader doesn't like unordered_map, so use map instead
+  auto params_loaded =
+      drake::yaml::LoadYamlFile<std::map<std::string, double>>(params_yaml);
+
+  const std::vector<std::pair<std::string, double>> expected_params {
+    {"normal_factor_a", 0},
+    {"normal_factor_b", 0.1},
+    {"normal_factor_c", 0},
+    {"normal_factor_d", 0},
+    {"normal_factor_e", 0},
+    {"lateral_factor", 0.02},
+    {"cutoff_min_depth", -std::numeric_limits<double>::infinity()},
+    {"cutoff_max_depth", std::numeric_limits<double>::infinity()},
+   };
+  for (const auto& [k, v] : expected_params) {
+    if (params_loaded.count(k) == 0) {
+      params_loaded.insert({k, v});
+    }
+  }
+  for (const auto& [k, v] : params_loaded) {
+    parameters.sensorParameters_[k] = v;
+  }
   return true;
 }
 
