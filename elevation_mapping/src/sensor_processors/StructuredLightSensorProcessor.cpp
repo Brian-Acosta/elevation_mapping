@@ -28,8 +28,6 @@ namespace elevation_mapping {
 StructuredLightSensorProcessor::StructuredLightSensorProcessor(
     const SensorProcessorBase::GeneralParameters& generalParameters)
     : SensorProcessorBase(generalParameters) {
-  bool Structred_Light_Sensor_Processor_is_not_implemented = false;
-  DRAKE_DEMAND(Structred_Light_Sensor_Processor_is_not_implemented);
 }
 
 StructuredLightSensorProcessor::~StructuredLightSensorProcessor() = default;
