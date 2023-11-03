@@ -220,7 +220,7 @@ bool ElevationMap::add(const PointCloudType::Ptr pointCloud,
   double duration = static_cast<std::chrono::duration<double>>(
       std::chrono::high_resolution_clock::now() - methodStartTime
     ).count();
-  drake::log()->info(
+  drake::log()->debug(
       "Raw map has been updated with a new point cloud in {} s.", duration
   );
   return true;
@@ -671,7 +671,7 @@ const std::string& ElevationMap::getFrameId() {
 
 void ElevationMap::updateUnderlyingMap(const grid_map::GridMap& underlyingMap) {
   const Parameters parameters{parameters_};
-  drake::log()->info("Updating underlying map.");
+  drake::log()->debug("Updating underlying map.");
 
   DRAKE_DEMAND(underlyingMap.getFrameId() == rawMap_.getFrameId());
   DRAKE_DEMAND(underlyingMap.exists("elevation"));
