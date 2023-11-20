@@ -82,7 +82,7 @@ void ElevationMap::setGeometry(const grid_map::Length& length,
 //  boost::recursive_mutex::scoped_lock scopedLockForFusedData(fusedMapMutex_);
   rawMap_.setGeometry(length, resolution, position);
   fusedMap_.setGeometry(length, resolution, position);
-  drake::log()->info(
+  drake::log()->trace(
       "Elevation map grid resized to {} rows and {} columns",
       rawMap_.getSize()(0),
       rawMap_.getSize()(1)
@@ -215,12 +215,13 @@ bool ElevationMap::add(const PointCloudType::Ptr pointCloud,
   }
 
   clean();
-  rawMap_.setTimestamp(1e9 * timestamp);  // Point cloud stores time in nanoseconds.
+  // Point cloud stores time in nanoseconds.
+  rawMap_.setTimestamp(1e9 * timestamp);
 
   double duration = static_cast<std::chrono::duration<double>>(
       std::chrono::high_resolution_clock::now() - methodStartTime
     ).count();
-  drake::log()->info(
+  drake::log()->trace(
       "Raw map has been updated with a new point cloud in {} s.", duration
   );
   return true;

@@ -37,7 +37,7 @@ SensorProcessorBase::SensorProcessorBase(const GeneralParameters& generalConfig)
   pcl::console::setVerbosityLevel(pcl::console::L_ERROR);
   generalParameters_ = generalConfig;
 
-  drake::log()->info(
+  drake::log()->trace(
       "Sensor processor general parameters are:"
       "\n\t- robot_base_frame_id: {}"
       "\n\t- map_frame_id: {}",
@@ -48,7 +48,8 @@ SensorProcessorBase::SensorProcessorBase(const GeneralParameters& generalConfig)
 SensorProcessorBase::~SensorProcessorBase() = default;
 
 bool SensorProcessorBase::readParameters(const std::string& yaml_filename) {
-  drake::log()->warn("TODO: implement parameter reading from yaml");
+  drake::log()->trace("[Elevation mapping sensor_processor_base] "
+                      "TODO: implement parameter reading from yaml");
   return true;
 }
 
