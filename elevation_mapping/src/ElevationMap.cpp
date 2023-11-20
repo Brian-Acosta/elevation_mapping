@@ -672,7 +672,7 @@ const std::string& ElevationMap::getFrameId() {
 
 void ElevationMap::updateUnderlyingMap(const grid_map::GridMap& underlyingMap) {
   const Parameters parameters{parameters_};
-  drake::log()->info("Updating underlying map.");
+  drake::log()->debug("Updating underlying map.");
 
   DRAKE_DEMAND(underlyingMap.getFrameId() == rawMap_.getFrameId());
   DRAKE_DEMAND(underlyingMap.exists("elevation"));
