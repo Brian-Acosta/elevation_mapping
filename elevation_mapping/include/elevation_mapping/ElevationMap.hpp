@@ -229,6 +229,8 @@ class ElevationMap {
                           double lengthInXSubmap,
                           double lengthInYSubmap);
 
+  void shift_map_z(double delta_z);
+
   friend class ElevationMapping;
 
  private:
