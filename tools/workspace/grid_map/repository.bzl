@@ -3,7 +3,7 @@ load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 
 def grid_map_repository(
         grid_map_commit = "main",
-        grid_map_checksum = "7fe1bc705b071d255e018ceff9fde23edfd9aae766484b038cb7d93a393d9308"):
+        grid_map_checksum = "d8faf2fff5f0104aa2bea8b60fb7995bffbc75a561c19ee7ebd5cbef218a93ea"):
     maybe(
         http_archive,
         name = "grid_map",
