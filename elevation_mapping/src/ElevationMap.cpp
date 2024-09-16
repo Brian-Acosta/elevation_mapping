@@ -729,7 +729,8 @@ void ElevationMap::setRawSubmapHeight(const grid_map::Position& initPosition,
 
 void ElevationMap::shift_map_z(double delta_z) {
   const auto& l = rawMap_.getLength();
-  rawMap_["elevation"] += delta_z * grid_map::Matrix::Ones(l(0), l(1));
+  auto& elevation = rawMap_["elevation"];
+  elevation += (delta_z * grid_map::Matrix::Ones(elevation.rows(), elevation.cols()));
 }
 
 float ElevationMap::cumulativeDistributionFunction(float x, float mean, float standardDeviation) {
